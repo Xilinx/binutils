@@ -1,9 +1,0 @@
-# i860 assembler testsuite.
-
-if [istarget i860-*-*] {
-    foreach file [lsort [glob -nocomplain -- $srcdir/$subdir/*.s]] {
-        set file [file tail $file]
-        set file [file rootname $file]
-        run_dump_test "$file"
-    }
-}
