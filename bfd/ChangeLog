@@ -1,3 +1,15 @@
+2002-06-14  Sergey Grigoriev  <serge@leopold.Physik.Uni-Augsburg.DE>
+
+	* pei-i386.c (COFF_SECTION_ALIGNMENT_ENTRIES): Enable 16 byte
+	alignment for .bss, .data and .text sections so that sse and sse2
+	code will work.
+	* pe-i386.c (COFF_SECTION_ALIGNMENT_ENTRIES): Likewise.
+
+2002-06013  J"orn Rennecke  <joern.rennecke@superh.com>
+
+	config.bfd: Add support for sh[1234]l*-*-elf* | sh3el*-*-elf*,
+	sh[1234]*-elf*.
+
 2002-06-12  John David Anglin  <dave@hiauly1.hia.nrc.ca>
 
 	* elflink.h (elf_bfd_final_link): Improve error handling for missing
