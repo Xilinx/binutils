@@ -21,10 +21,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 #include "/usr/include/a.out.h"
 #include <stdio.h>
 
-#ifndef _
-#define _(X) X
-#endif
-
 int
 main (argc, argv)
      int argc; char** argv;
