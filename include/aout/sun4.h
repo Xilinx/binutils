@@ -1,24 +1,8 @@
-/* SPARC-specific values for a.out files 
-
-   Copyright 2001, 2009 Free Software Foundation, Inc.
-
-   This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 2 of the License, or
-   (at your option) any later version.
-   
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
-   
-   You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston, MA 02110-1301, USA.  */
+/* SPARC-specific values for a.out files */
 
 /* Some systems, e.g., AIX, may have defined this in header files already
    included.  */
-#undef  TARGET_PAGE_SIZE
+#undef TARGET_PAGE_SIZE
 #define TARGET_PAGE_SIZE	0x2000		/* 8K.  aka NBPG in <sys/param.h> */
 /* Note that some SPARCs have 4K pages, some 8K, some others.  */
 
@@ -42,9 +26,6 @@
    an address of zero if a_entry (!!!) is lower than the otherwise
    expected text address.  These kludges have gotta go!
    For linked files, should reflect reality if we know it.  */
-
-#define N_SHARED_LIB(x) ((x).a_entry < TEXT_START_ADDR \
-			 && (x).a_text >= EXEC_BYTES_SIZE)
 
 /* This differs from the version in aout64.h (which we override by defining
    it here) only for NMAGIC (we return TEXT_START_ADDR+EXEC_BYTES_SIZE;

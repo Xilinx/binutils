@@ -1,9 +1,8 @@
-# Copyright (C) 1993, 1997, 1999, 2000, 2002, 2004, 2005, 2007
-# Free Software Foundation, Inc.
+# Copyright (C) 1993, 1997 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 3 of the License, or
+# the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
 # 
 # This program is distributed in the hope that it will be useful,
@@ -13,10 +12,10 @@
 # 
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston, MA 02110-1301, USA.  
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  
 
 # Please email any bugs, comments, and/or additions to this file to:
-# dejagnu@gnu.org
+# DejaGnu@cygnus.com
 
 # Written by the Center for Software Science at the University of Utah
 # and by Cygnus Support.
@@ -25,22 +24,28 @@ proc do_subspace_align_test {} {
     set testname "ss_align.s: Test subspace alignment (part 2)"
     set x 0
 
-    if {[istarget hppa*64*-*-*]
-	|| [istarget hppa*-*-*elf*] || [istarget hppa*-*-linux*]} then {
-      return 
-    }
-
     if [gas_test_old "ss_align.s" "" "subspace alignment (part 1)"] then {
 	objdump_start_no_subdir "a.out" "-h"
 
     # Check the headers for the correct alignment value for the
-    # the $DATA$ subspace (som).
-	while 1 {
-	    expect  {
-		-re "DATA\[^\n\]* 2..6\[^\n\]*\n"	{ set x 1 }
-		-re "\[^\n\]*\n"				{ }
-		timeout			{ perror "timeout\n"; break }
-		eof				{ break }
+    # .data section (elf) or the $DATA$ subspace (som).
+	if [istarget hppa*-*-*elf*] then {
+	    while 1 {
+		expect {
+		    -re "data\[^\n\]* 2..6\[^\n\]*\n"	{ set x 1 }
+		    -re "\[^\n\]*\n"				{ }
+		    timeout			{ perror "timeout\n"; break }
+		    eof				{ break }
+		}
+	    }
+	} else {
+	    while 1 {
+		expect  {
+		    -re "DATA\[^\n\]* 2..6\[^\n\]*\n"	{ set x 1 }
+		    -re "\[^\n\]*\n"				{ }
+		    timeout			{ perror "timeout\n"; break }
+		    eof				{ break }
+		}
 	    }
 	}
 
@@ -109,11 +114,6 @@ proc do_align3_test {} {
     set testname "align3.s: Test for alignment bug when switching subspaces (part2)"
     set x 0
 
-    if {[istarget hppa*64*-*-*]
-	|| [istarget hppa*-*-*elf*] || [istarget hppa*-*-linux*]} then {
-      return 
-    }
-
     if [gas_test_old "align3.s" "" "Test for alignment bug when switching subspaces (part1)"] {
 	objdump_start_no_subdir "a.out" "--prefix-addresses -d"
 
@@ -141,9 +141,8 @@ proc do_align4_test {} {
     set testname "align4.s: More subspace alignment tests (part2)"
     set x 0
 
-    if {[istarget hppa*64*-*-*]
-	|| [istarget hppa*-*-*elf*] || [istarget hppa*-*-linux*]} then {
-      return 
+    if [istarget hppa*-*-*elf*] then {
+	return
     }
 
     if [gas_test_old "align4.s" "" "More subspace alignment tests (part1)"] {
@@ -196,11 +195,6 @@ proc do_import_test {} {
 }
 
 proc do_common_test {} {
-    # linux has a different .comm syntax
-    if [istarget hppa*-*-linux*] then {
-	return
-    }
-
     set testname "common.s: Test for bug in .comm handling (part2)"
     set x 0
 
@@ -258,8 +252,7 @@ if [istarget hppa*-*-*] then {
     do_common_test
 
     # Test for an off-by-2 bug in range check for conditional branches
-    # The labels in brlenbug.s lack colons and are not linux compatible.
-    if {! [istarget *-*-linux*]} then {
-	gas_test_error "brlenbug.s" "" "Check for error(s) in branch length"
-    }
+    gas_test_error "brlenbug.s" "" "Check for error(s) in branch length"
+
 }
+

@@ -1,12 +1,11 @@
 /* depend.c - Handle dependency tracking.
-   Copyright 1997, 1998, 2000, 2001, 2003, 2004, 2005, 2007
-   Free Software Foundation, Inc.
+   Copyright (C) 1997, 1998 Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
    GAS is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3, or (at your option)
+   the Free Software Foundation; either version 2, or (at your option)
    any later version.
 
    GAS is distributed in the hope that it will be useful,
@@ -16,37 +15,40 @@
 
    You should have received a copy of the GNU General Public License
    along with GAS; see the file COPYING.  If not, write to the Free
-   Software Foundation, 51 Franklin Street - Fifth Floor, Boston, MA
-   02110-1301, USA.  */
+   Software Foundation, 59 Temple Place - Suite 330, Boston, MA
+   02111-1307, USA.  */
 
 #include "as.h"
 
 /* The file to write to, or NULL if no dependencies being kept.  */
-static char * dep_file = NULL;
+static char *dep_file = NULL;
 
 struct dependency
-  {
-    char * file;
-    struct dependency * next;
-  };
+{
+  char *file;
+  struct dependency *next;
+};
 
 /* All the files we depend on.  */
-static struct dependency * dep_chain = NULL;
+static struct dependency *dep_chain = NULL;
 
 /* Current column in output file.  */
 static int column = 0;
 
-static int quote_string_for_make (FILE *, char *);
-static void wrap_output (FILE *, char *, int);
+static int quote_string_for_make PARAMS ((FILE *, char *));
+static void wrap_output PARAMS ((FILE *, char *, int));
 
 /* Number of columns allowable.  */
 #define MAX_COLUMNS 72
+
 
+
 /* Start saving dependencies, to be written to FILENAME.  If this is
    never called, then dependency tracking is simply skipped.  */
 
 void
-start_dependencies (char *filename)
+start_dependencies (filename)
+     char *filename;
 {
   dep_file = filename;
 }
@@ -54,7 +56,8 @@ start_dependencies (char *filename)
 /* Noticed a new filename, so try to register it.  */
 
 void
-register_dependency (char *filename)
+register_dependency (filename)
+     char *filename;
 {
   struct dependency *dep;
 
@@ -63,7 +66,7 @@ register_dependency (char *filename)
 
   for (dep = dep_chain; dep != NULL; dep = dep->next)
     {
-      if (!strcmp (filename, dep->file))
+      if (! strcmp (filename, dep->file))
 	return;
     }
 
@@ -80,15 +83,15 @@ register_dependency (char *filename)
    This code is taken from gcc with only minor changes.  */
 
 static int
-quote_string_for_make (FILE *file, char *src)
+quote_string_for_make (file, src)
+     FILE *file;
+     char *src;
 {
   char *p = src;
   int i = 0;
-
   for (;;)
     {
       char c = *p++;
-
       switch (c)
 	{
 	case '\0':
@@ -102,8 +105,7 @@ quote_string_for_make (FILE *file, char *src)
 	       the end of a file name; and backslashes in other
 	       contexts should not be doubled.  */
 	    char *q;
-
-	    for (q = p - 1; src < q && q[-1] == '\\'; q--)
+	    for (q = p - 1; src < q && q[-1] == '\\';  q--)
 	      {
 		if (file)
 		  putc ('\\', file);
@@ -116,7 +118,7 @@ quote_string_for_make (FILE *file, char *src)
 	    putc ('\\', file);
 	  i++;
 	  goto ordinary_char;
-
+	  
 	case '$':
 	  if (file)
 	    putc (c, file);
@@ -142,18 +144,17 @@ quote_string_for_make (FILE *file, char *src)
    wrapping as necessary.  */
 
 static void
-wrap_output (FILE *f, char *string, int spacer)
+wrap_output (f, string, spacer)
+     FILE *f;
+     char *string;
+     int spacer;
 {
   int len = quote_string_for_make (NULL, string);
 
   if (len == 0)
     return;
 
-  if (column
-      && (MAX_COLUMNS
-	  - 1 /* spacer */
-	  - 2 /* ` \'   */
-	  < column + len))
+  if (column && MAX_COLUMNS - 1 /*spacer*/ - 2 /*` \'*/ < column + len)
     {
       fprintf (f, " \\\n ");
       column = 0;
@@ -180,7 +181,7 @@ wrap_output (FILE *f, char *string, int spacer)
 /* Print dependency file.  */
 
 void
-print_dependencies (void)
+print_dependencies ()
 {
   FILE *f;
   struct dependency *dep;
@@ -188,10 +189,10 @@ print_dependencies (void)
   if (dep_file == NULL)
     return;
 
-  f = fopen (dep_file, FOPEN_WT);
+  f = fopen (dep_file, "w");
   if (f == NULL)
     {
-      as_warn (_("can't open `%s' for writing"), dep_file);
+      as_warn (_("Can't open `%s' for writing"), dep_file);
       return;
     }
 
@@ -203,5 +204,5 @@ print_dependencies (void)
   putc ('\n', f);
 
   if (fclose (f))
-    as_warn (_("can't close `%s'"), dep_file);
+    as_warn (_("Can't close `%s'"), dep_file);
 }

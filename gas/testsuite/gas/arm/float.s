@@ -1,6 +1,5 @@
-	.text
-	.align 0
-l:
+.text
+.align 0
 	mvfe	f0, f1
 	mvfeqe	f3, f5
 	mvfeqd	f4, #1.0

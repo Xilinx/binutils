@@ -5,8 +5,6 @@
 const char * bar1 = "asdf";
 const char * bar2 = "asdf";
 
-extern int old_foo1();
-
 int
 bar()
 {

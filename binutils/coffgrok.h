@@ -1,23 +1,3 @@
-/* coffgrok.h
-   Copyright 2001, 2002, 2003, 2005, 2007 Free Software Foundation, Inc.
-
-   This file is part of GNU Binutils.
-
-   This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
-   (at your option) any later version.
-
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
-
-   You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
-   MA 02110-1301, USA.  */
-
 #define T_NULL		0
 #define T_VOID		1	/* function argument (only used by compiler) */
 #define T_CHAR		2	/* character		*/
@@ -37,25 +17,25 @@
 #define T_LNGDBL	16	/* long double		*/
 
 
-struct coff_reloc
-{
-  int offset;
-  struct coff_symbol *symbol;
-  int addend;
-};
+ struct coff_reloc
+ {
+   int offset;
+   struct coff_symbol *symbol;
+   int addend;
+ };
 
-struct coff_section
-{
-  char *name;
-  int code;
-  int data;
-  int address;
-  int number;  /* 0..n, .text = 0 */
-  int nrelocs;
-  int size;
-  struct coff_reloc *relocs;
-  struct bfd_section *bfd_section;
-};
+ struct coff_section 
+ {
+   char *name;
+   int code;
+   int data;
+   int address;
+   int number;  /* 0..n, .text = 0 */
+   int nrelocs;
+   int size;
+   struct coff_reloc *relocs;
+   struct sec *bfd_section;
+ };
 
 struct coff_ofile
 {
@@ -83,7 +63,7 @@ struct coff_sfile
 
   /* Vector which maps where in each output section
      the input file has it's data */
-  struct coff_isection *section;
+  struct coff_isection *section; 
 
 };
 
@@ -98,7 +78,7 @@ struct coff_sfile
       } type;
   union
     {
-      struct
+      struct 
 	{
 	int address;
 	int size;
@@ -148,7 +128,7 @@ struct coff_sfile
 };
 
 
- struct coff_line
+ struct coff_line 
  {
    int nlines;
    int *lines;
@@ -189,7 +169,7 @@ struct coff_sfile
 	 coff_vis_tag,
 	 coff_vis_member_of_struct,
 	 coff_vis_member_of_enum,
-	 coff_vis_autoparam,
+	 coff_vis_autoparam,	
 	 coff_vis_regparam,
        } type;
    };
@@ -223,4 +203,4 @@ struct coff_sfile
      struct coff_sfile *sfile;
   };
 
-struct coff_ofile *coff_grok PARAMS ((bfd *));
+struct coff_ofile *coff_grok();

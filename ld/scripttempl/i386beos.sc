@@ -38,7 +38,7 @@ ${RELOCATING-OUTPUT_FORMAT(${RELOCATEABLE_OUTPUT_FORMAT})}
 
 ${LIB_SEARCH_DIRS}
 
-${RELOCATING+ENTRY (__start)}
+ENTRY(__start)
 ${RELOCATING+header = .;}
 ${RELOCATING+__fltused = .; /* set up floating pt for MS .obj\'s */}
 ${RELOCATING+__ldused = .;}
@@ -177,7 +177,7 @@ SECTIONS
   .debug_pubnames 0 ${RELOCATING+(NOLOAD)} : { *(.debug_pubnames) }
 
   /* DWARF 2 */
-  .debug_info     0 ${RELOCATING+(NOLOAD)} : { *(.debug_info) *(.gnu.linkonce.wi.*) }
+  .debug_info     0 ${RELOCATING+(NOLOAD)} : { *(.debug_info) }
   .debug_abbrev   0 ${RELOCATING+(NOLOAD)} : { *(.debug_abbrev) }
   .debug_line     0 ${RELOCATING+(NOLOAD)} : { *(.debug_line) }
   .debug_frame    0 ${RELOCATING+(NOLOAD)} : { *(.debug_frame) }

@@ -1,7 +1,15 @@
-	.level 1.1
-	.code
+	.SPACE $PRIVATE$
+	.SUBSPA $DATA$,QUAD=1,ALIGN=8,ACCESS=31
+	.SUBSPA $BSS$,QUAD=1,ALIGN=8,ACCESS=31,ZERO,SORT=82
+	.SPACE $TEXT$
+	.SUBSPA $LIT$,QUAD=0,ALIGN=8,ACCESS=44
+	.SUBSPA $CODE$,QUAD=0,ALIGN=8,ACCESS=44,CODE_ONLY
+
+	.SPACE $TEXT$
+	.SUBSPA $CODE$
+
 	.align 4
-; Basic unit instruction tests.  
+; Basic immediate instruction tests.  
 ;
 ; We could/should test some of the corner cases for register and 
 ; immediate fields.  We should also check the assorted field
@@ -45,16 +53,3 @@
 	uaddcmt,ndc %r4,%r5,%r6
 	uaddcmt,nbc %r4,%r5,%r6
 	uaddcmt,nhc %r4,%r5,%r6
-
-	uaddcm,tc %r4,%r5,%r6
-	uaddcm,tc,sbz %r4,%r5,%r6
-	uaddcm,tc,shz %r4,%r5,%r6
-	uaddcm,tc,sdc %r4,%r5,%r6
-	uaddcm,tc,sbc %r4,%r5,%r6
-	uaddcm,tc,shc %r4,%r5,%r6
-	uaddcm,tc,tr %r4,%r5,%r6
-	uaddcm,tc,nbz %r4,%r5,%r6
-	uaddcm,tc,nhz %r4,%r5,%r6
-	uaddcm,tc,ndc %r4,%r5,%r6
-	uaddcm,tc,nbc %r4,%r5,%r6
-	uaddcm,tc,nhc %r4,%r5,%r6

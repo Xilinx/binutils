@@ -1,24 +1,6 @@
 # Test linking directly to S-records.
 # By Ian Lance Taylor, Cygnus Support.
-#   Copyright 1999, 2000, 2001, 2002, 2003, 2005, 2006, 2007, 2009
-#   Free Software Foundation, Inc.
-#
-# This file is part of the GNU Binutils.
-#
-# This program is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
-# MA 02110-1301, USA.
+# Public domain.
 
 # Get the offset from an S-record line to the start of the data.
 
@@ -228,10 +210,7 @@ proc run_srec_test { test objs } {
     global sizeof_headers
     global host_triplet
 
-    # Tell the ELF linker to not do anything clever with .eh_frame,
-    # not to put anything in small data, and define various symbols.
-    set flags "--traditional-format -G 0 "
-    append flags [ld_simple_link_defsyms]
+    set flags ""
 
     # If the linker script uses SIZEOF_HEADERS, use a -Ttext argument
     # to force both the normal link and the S-record link to be put in
@@ -242,43 +221,52 @@ proc run_srec_test { test objs } {
 	set flags "$flags -Ttext 0x1000"
     }
 
-    if [istarget sh64*-*-elf] {
-        # This is what gcc passes to ld by default.
-        set flags "$flags -mshelf32"
-        # SH64 targets cannot convert format in the linker 
-        # using the -oformat command line switch.
-	setup_xfail "sh64*-*-*"
+    # The a29k compiled code calls V_SPILL and V_FILL.  Since we don't
+    # need to run this code, but we don't have definitions for those
+    # functions, we just define them out.
+    if [istarget a29k*-*-*] {
+	set flags "$flags --defsym V_SPILL=0 --defsym V_FILL=0"
     }
 
-    if {[istarget arm*-*-*]       || \
-        [istarget strongarm*-*-*] || \
-        [istarget xscale*-*-*]    || \
-        [istarget thumb-*-*] } {
-        # ARM targets cannot convert format in the linker 
-        # using the --oformat command line switch
-	setup_xfail "*arm*-*-*"
-	setup_xfail "xscale-*-*"
-	setup_xfail "thumb-*-*"
+    # ARM targets call __gccmain
+    if [istarget arm-*-*] {
+	set flags "$flags --defsym ___gccmain=0"
+    }
+    
+    if [istarget strongarm-*-*] {
+	set flags "$flags --defsym __gccmain=0"
+    }
+    
+    # Thumb targets call __gccmain
+    if [istarget thumb-*-*] {
+	set flags "$flags --defsym ___gccmain=0"
+    }
+
+    # PowerPC EABI code calls __eabi.
+    if [istarget powerpc*-*-eabi*] {
+	set flags "$flags --defsym __eabi=0"
+    }
+
+    # mn10200 code calls __truncsipsi2_d0_d2.
+    if {[istarget mn10200*-*-*]} then {
+	set flags "$flags --defsym __truncsipsi2_d0_d2=0"
     }
 
     # V850 targets need libgcc.a
     if [istarget v850*-*-elf] {
 	set objs "$objs -L ../gcc -lgcc"
     }
-
-    # Xtensa ELF targets relax by default; S-Record linker does not
-    if [istarget xtensa*-*-*] {
-	set flags "$flags -no-relax"
-    }
-
+    
     if { ![ld_simple_link $ld tmpdir/sr1 "$flags $objs"] \
-	 || ![ld_simple_link $ld tmpdir/sr2.sr "$flags --oformat srec $objs"] } {
+	 || ![ld_simple_link $ld tmpdir/sr2.sr "$flags -oformat srec $objs"] } {
+	setup_xfail "hppa*-*-*elf*"
 	fail $test
 	return
     }
 
     send_log "$objcopy -O srec tmpdir/sr1 tmpdir/sr1.sr\n"
-    set exec_output [run_host_cmd "$objcopy" "-O srec tmpdir/sr1 tmpdir/sr1.sr"]
+    verbose "$objcopy -O srec tmpdir/sr1 tmpdir/sr1.sr"
+    catch "exec $objcopy -O srec tmpdir/sr1 tmpdir/sr1.sr" exec_output
     set exec_output [prune_warnings $exec_output]
     if ![string match "" $exec_output] {
 	send_log "$exec_output\n"
@@ -302,7 +290,7 @@ set test1 "S-records"
 set test2 "S-records with constructors"
 
 # See whether the default linker script uses SIZEOF_HEADERS.
-set exec_output [run_host_cmd "$ld" "--verbose"]
+catch "exec $ld --verbose" exec_output
 set sizeof_headers [string match "*SIZEOF_HEADERS*" $exec_output]
 
 # First test linking a C program.  We don't require any libraries.  We
@@ -310,7 +298,7 @@ set sizeof_headers [string match "*SIZEOF_HEADERS*" $exec_output]
 # directly to the S-record format, and require that the two files
 # contain the same data.
 
-if { ![is_remote host] && [which $CC] == 0 } {
+if { [which $CC] == 0 } {
     untested $test1
     untested $test2
     return
@@ -330,7 +318,7 @@ setup_xfail "i*86-*-aout*"
 # These tests fail on the native MIPS ELF targets because the GP value
 # in the .reginfo section is not updated when the S-record version is
 # written out.  The mips-elf target itself does not use a .reginfo section.
-setup_xfail "mips*-*-irix5*" "mips*-*-irix6*" "mips*-*-linux*"
+setup_xfail "mips*-*-irix5*" "mips*-*-irix6*"
 
 # The S-record linker doesn't do the magic TOC handling that XCOFF
 # linkers do.
@@ -338,37 +326,22 @@ setup_xfail "*-*-aix*" "*-*-xcoff*"
 
 # The S-record linker doesn't build ARM/Thumb stubs.
 setup_xfail "arm-*-coff"
-setup_xfail "strongarm*-*-coff"
-setup_xfail "xscale*-*-coff"
+setup_xfail "strongarm-*-*"
 setup_xfail "arm-*-pe*"
 # setup_xfail "arm-*elf*"
 setup_xfail "thumb-*-coff*"
 setup_xfail "thumb-*-pe*"
 setup_xfail "thumb-*-elf*"
-setup_xfail "arm*-*-linux*"
+
+# The S-record linker doesn't build special EABI sections.
+setup_xfail "powerpc*-*-eabi*"
 
 # The S-record linker doesn't include the .{zda} sections.
 setup_xfail "v850*-*-elf"
 
 # The S-record linker doesn't handle Alpha Elf relaxation.
-setup_xfail "alpha*-*-elf*" "alpha*-*-linux-*" "alpha*-*-gnu*"
+setup_xfail "alpha*-*-elf*" "alpha*-*-linux-gnu*" "alpha*-*-gnu*"
 setup_xfail "alpha*-*-netbsd*"
-
-# The S-record linker hasn't any hope of coping with HPPA relocs.
-# Or MeP complex relocs.
-setup_xfail "hppa*-*-*" "mep-*-*"
-
-# The S-record linker doesn't handle IA64 Elf relaxation.
-setup_xfail "ia64-*-*"
-
-# The S-record linker doesn't support the special PE headers - the PE
-# emulation tries to write pe-specific information to the PE headers
-# in the output bfd, but it's not a PE bfd (it's an srec bfd)
-setup_xfail "*-*-cygwin*" "*-*-mingw*" "*-*-pe*" "*-*-winnt*"
-setup_xfail "score-*-*"
-
-# The S-record linker doesn't support Blackfin ELF FDPIC ABI.
-setup_xfail "bfin-*-linux-uclibc"
 
 run_srec_test $test1 "tmpdir/sr1.o tmpdir/sr2.o"
 
@@ -376,30 +349,26 @@ run_srec_test $test1 "tmpdir/sr1.o tmpdir/sr2.o"
 # destructors.  Note that since we are not linking against any
 # libraries, this program won't actually work or anything.
 
-if { ![is_remote host] && [which $CXX] == 0 } {
+if { [which $CXX] == 0 } {
     untested $test2
     return
 }
 
-if ![ld_compile "$CXX $CXXFLAGS -fno-exceptions" $srcdir/$subdir/sr3.cc tmpdir/sr3.o] {
+if ![ld_compile "$CXX $CXXFLAGS -fgnu-linker" $srcdir/$subdir/sr3.cc tmpdir/sr3.o] {
     unresolved $test2
     return
 }
 
 # See above.
 setup_xfail "i*86-*-aout*"
-setup_xfail "mips*-*-irix5*" "mips*-*-irix6*" "mips*-*-linux*"
+setup_xfail "mips*-*-irix5*" "mips*-*-irix6*"
 setup_xfail "*-*-aix*" "*-*-xcoff*"
-setup_xfail "arm*-*-*"
-setup_xfail "strongarm*-*-*"
+setup_xfail "arm-*-*"
+setup_xfail "strongarm-*-*"
 setup_xfail "thumb-*-*"
+setup_xfail "powerpc*-*-eabi*"
 setup_xfail "v850*-*-elf"
-setup_xfail "alpha*-*-elf*" "alpha*-*-linux-*" "alpha*-*-gnu*"
+setup_xfail "alpha*-*-elf*" "alpha*-*-linux-gnu*" "alpha*-*-gnu*"
 setup_xfail "alpha*-*-netbsd*"
-setup_xfail "hppa*-*-*" "mep-*-*"
-setup_xfail "ia64-*-*"
-setup_xfail "*-*-cygwin*" "*-*-mingw*" "*-*-pe*" "*-*-winnt*"
-setup_xfail "score-*-*"
-setup_xfail "bfin-*-linux-uclibc"
 
 run_srec_test $test2 "tmpdir/sr3.o"

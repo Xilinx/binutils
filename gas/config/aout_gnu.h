@@ -1,13 +1,12 @@
 /* This file is aout_gnu.h
 
-   Copyright 1987, 1988, 1989, 1990, 1991, 1992, 1993, 1994, 2000, 2002,
-   2005, 2007 Free Software Foundation, Inc.
+   Copyright (C) 1987-1992 Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
    GAS is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3, or (at your option)
+   the Free Software Foundation; either version 2, or (at your option)
    any later version.
 
    GAS is distributed in the hope that it will be useful,
@@ -17,8 +16,7 @@
 
    You should have received a copy of the GNU General Public License
    along with GAS; see the file COPYING.  If not, write to
-   the Free Software Foundation, 51 Franklin Street - Fifth Floor,
-   Boston, MA 02110-1301, USA.  */
+   the Free Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 #ifndef __A_OUT_GNU_H__
 #define __A_OUT_GNU_H__
@@ -27,15 +25,15 @@
    relocations, and one which uses extended relocations.
 
    Today, the extended reloc uses are
-   TC_SPARC
+   TC_SPARC, TC_A29K
 
    each must define the enum reloc_type
 
 */
 
-#define USE_EXTENDED_RELOC defined(TC_SPARC)
+#define USE_EXTENDED_RELOC (defined(TC_SPARC) || defined(TC_A29K))
 
-#if defined(TC_SPARC)
+#if defined(TC_SPARC) || defined(TC_A29K)
 enum reloc_type
   {
     RELOC_8, RELOC_16, RELOC_32,/* simple relocations */
@@ -63,7 +61,8 @@ enum reloc_type
     NO_RELOC
   };
 
-#endif /* TC_SPARC */
+#endif /* TC_SPARC or TC_A29K */
+
 
 #define __GNU_EXEC_MACROS__
 
@@ -120,7 +119,6 @@ enum machine_type
     M_386 = 100,
     M_29K = 101,
     M_RS6000 = 102,		/* IBM RS/6000 */
-    M_VAX4K_NETBSD = 150,
     /* HP/BSD formats */
     M_HP200 = 200,		/* hp200 (68010) BSD binary */
     M_HP300 = 300,		/* hp300 (68020+68881) BSD binary */
@@ -184,6 +182,7 @@ enum machine_type
 			 _N_HDROFF((x)) + sizeof (struct exec) :	\
 			 sizeof (struct exec))
 #endif
+
 
 #ifndef N_DATOFF
 #define N_DATOFF(x)	( N_TXTOFF(x) + (x).a_text )
@@ -318,6 +317,7 @@ struct reloc_ext_bytes
     unsigned char r_addend[4];
   };
 
+
 #define	RELOC_EXT_BITS_EXTERN_BIG	0x80
 #define	RELOC_EXT_BITS_EXTERN_LITTLE	0x01
 
@@ -345,6 +345,8 @@ struct reloc_info_extended
 
 /* The standard, old-fashioned, Berkeley compatible relocation struct */
 
+
+
 #ifdef TC_I860
 /* NOTE: three bits max, see struct reloc_info_i860.r_type */
 enum i860_reloc_type
@@ -359,6 +361,7 @@ enum highlow_type
   {
     NO_SPEC = 0, PAIR, HIGH, HIGHADJ,
   };
+
 
 struct reloc_info_i860
 {
@@ -377,6 +380,7 @@ struct reloc_info_i860
 };
 
 #endif /* TC_I860 */
+
 
 struct reloc_std_bytes
   {

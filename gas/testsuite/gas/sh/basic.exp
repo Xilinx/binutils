@@ -1,9 +1,8 @@
-# Copyright (C) 1995, 1996, 1997, 2002, 2003, 2004, 2005, 2006, 2007, 2009
-# Free Software Foundation, Inc.
+# Copyright (C) 1995, 1996, 1997 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 3 of the License, or
+# the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
 # 
 # This program is distributed in the hope that it will be useful,
@@ -13,23 +12,12 @@
 # 
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston, MA 02110-1301, USA.  
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  
 
 # Please email any bugs, comments, and/or additions to this file to:
-# dejagnu@gnu.org
+# DejaGnu@cygnus.com
 
 # Written by Cygnus Support.
-
-if {[istarget "sh*-*-linux-*"] || [istarget "sh*l*-*-netbsdelf*"]} then {
-    global ASFLAGS
-    set ASFLAGS "$ASFLAGS -big"
-}
-if {[istarget "sh64*-*-*"] || [istarget "sh5*-*-*"]} then {
-    global ASFLAGS
-
-    set old_ASFLAGS $ASFLAGS
-    set ASFLAGS "$ASFLAGS --abi=32 --isa=SHcompact"
-}
 
 proc do_fp {} {
     set testname "fp.s: floating point tests (sh3e)"
@@ -77,37 +65,6 @@ proc do_fp {} {
 	    -re "^ +\[0-9\]+ 0038 4352\[^\n\]*\n"	{ set x [expr $x+1] }
 	    -re "^ +\[0-9\]+ 003a 036A\[^\n\]*\n"	{ set x [expr $x+1] }
 	    -re "^ +\[0-9\]+ 003c 4362\[^\n\]*\n"	{ set x [expr $x+1] }
-	    -re "^ +\[0-9\]+ 0000 08F0\[^\n\]*\n"	{ set x [expr $x+1] }
-	    -re "^ +\[0-9\]+ 0002 0AF0\[^\n\]*\n"	{ set x [expr $x+1] }
-	    -re "^ +\[0-9\]+ 0004 09F0\[^\n\]*\n"	{ set x [expr $x+1] }
-	    -re "^ +\[0-9\]+ 0006 0BF0\[^\n\]*\n"	{ set x [expr $x+1] }
-	    -re "^ +\[0-9\]+ 0008 06F0\[^\n\]*\n"	{ set x [expr $x+1] }
-	    -re "^ +\[0-9\]+ 000a 07F0\[^\n\]*\n"	{ set x [expr $x+1] }
-	    -re "^ +\[0-9\]+ 000c 0CF1\[^\n\]*\n"	{ set x [expr $x+1] }
-	    -re "^ +\[0-9\]+ 000e 8DF0\[^\n\]*\n"	{ set x [expr $x+1] }
-	    -re "^ +\[0-9\]+ 0010 9DF0\[^\n\]*\n"	{ set x [expr $x+1] }
-	    -re "^ +\[0-9\]+ 0012 00F1\[^\n\]*\n"	{ set x [expr $x+1] }
-	    -re "^ +\[0-9\]+ 0014 01F1\[^\n\]*\n"	{ set x [expr $x+1] }
-	    -re "^ +\[0-9\]+ 0016 02F1\[^\n\]*\n"	{ set x [expr $x+1] }
-	    -re "^ +\[0-9\]+ 0018 03F1\[^\n\]*\n"	{ set x [expr $x+1] }
-	    -re "^ +\[0-9\]+ 001a 0EF1\[^\n\]*\n"	{ set x [expr $x+1] }
-	    -re "^ +\[0-9\]+ 001c 04F1\[^\n\]*\n"	{ set x [expr $x+1] }
-	    -re "^ +\[0-9\]+ 001e 05F1\[^\n\]*\n"	{ set x [expr $x+1] }
-	    -re "^ +\[0-9\]+ 0020 4DF0\[^\n\]*\n"	{ set x [expr $x+1] }
-	    -re "^ +\[0-9\]+ 0022 5DF0\[^\n\]*\n"	{ set x [expr $x+1] }
-	    -re "^ +\[0-9\]+ 0024 6DF0\[^\n\]*\n"	{ set x [expr $x+1] }
-	    -re "^ +\[0-9\]+ 0026 2DF0\[^\n\]*\n"	{ set x [expr $x+1] }
-	    -re "^ +\[0-9\]+ 0028 3DF0\[^\n\]*\n"	{ set x [expr $x+1] }
-	    -re "^ +\[0-9\]+ 002a 0DF0\[^\n\]*\n"	{ set x [expr $x+1] }
-	    -re "^ +\[0-9\]+ 002c 1DF0\[^\n\]*\n"	{ set x [expr $x+1] }
-	    -re "^ +\[0-9\]+ 002e 5A43\[^\n\]*\n"	{ set x [expr $x+1] }
-	    -re "^ +\[0-9\]+ 0030 5643\[^\n\]*\n"	{ set x [expr $x+1] }
-	    -re "^ +\[0-9\]+ 0032 6A43\[^\n\]*\n"	{ set x [expr $x+1] }
-	    -re "^ +\[0-9\]+ 0034 6643\[^\n\]*\n"	{ set x [expr $x+1] }
-	    -re "^ +\[0-9\]+ 0036 5A03\[^\n\]*\n"	{ set x [expr $x+1] }
-	    -re "^ +\[0-9\]+ 0038 5243\[^\n\]*\n"	{ set x [expr $x+1] }
-	    -re "^ +\[0-9\]+ 003a 6A03\[^\n\]*\n"	{ set x [expr $x+1] }
-	    -re "^ +\[0-9\]+ 003c 6243\[^\n\]*\n"	{ set x [expr $x+1] }
 	    -re "\[^\n\]*\n"				{ }
 	    timeout				{ perror "timeout\n"; break }
 	    eof					{ break }
@@ -126,55 +83,4 @@ proc do_fp {} {
 if [istarget sh*-*-*] then {
     # Test the basic instruction parser.
     do_fp
-
-    # coff is missing information about the machine type, so everything is
-    # dumped as sh4.
-    if {[istarget sh*-*coff] || [istarget sh*-pe*] || [istarget sh*-rtems]} then {
-	run_dump_test "pcrel-coff"
-    } elseif {[istarget sh*-hms] } {
-	run_dump_test "pcrel-hms"
-    } elseif {![istarget sh64*-*-*] && ![istarget sh5*-*-*] } {
-	# Test DSP instructions
-	run_dump_test "dsp"
-
-	run_dump_test "pcrel"
-
-	run_dump_test "pcrel2"
-    }
-
-    if {[istarget sh*-*elf] || [istarget sh*-linux*]} then {
-	if {![istarget "sh64*-*-*"] && ![istarget "sh5*-*-*"]} then {
-	    run_dump_test "sh4a"
-	    run_dump_test "sh4a-fp"
-
-	    run_dump_test "sh4a-dsp"
-	    run_dump_test "sh4al-dsp"
-
-	    run_dump_test "sh2a"
-	}
-
-	run_dump_test "pic"
-
-	# Test TLS.
-	run_dump_test "tlsd"
-
-	run_dump_test "tlspic"
-
-	run_dump_test "tlsnopic"
-
-	# Test --renesas.
-	run_dump_test "renesas-1"
-
-	# Test --allow-reg-prefix.
-	run_dump_test "reg-prefix"
-
-	run_dump_test "too_large"
-
-	run_dump_test "sign-extension"
-    }
-}
-
-if {[info exists old_ASFLAGS]} {
-    global ASFLAGS
-    set ASFLAGS $old_ASFLAGS
 }

@@ -29,11 +29,6 @@ SECTIONS
   .data :
   {
     *(.data)
-    ${RELOCATING+*(.gcc_exc*)}
-    ${RELOCATING+___EH_FRAME_BEGIN__ = . ;}
-    ${RELOCATING+*(.eh_fram*)}
-    ${RELOCATING+___EH_FRAME_END__ = . ;}
-    ${RELOCATING+LONG(0);}
     ${RELOCATING+ _edata = . ; }
   } ${RELOCATING+ > ram}
   .bss :

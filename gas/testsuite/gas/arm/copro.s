@@ -20,27 +20,5 @@ bar:
 	mrc	2, 3, r5, c1, c2
 	mrcge	p4, 5, r15, cr1, cr2, 7
 
-	mcr	p7, 1, r5, cr1, cr1
+	mcr	p7, 1, r15, cr1, cr1
 	mcrlt	5, 1, r8, cr2, cr9, 0
-
-	@ The following patterns test Addressing Mode 5 "Unindexed"
-	
-        ldc     3,   c7, [r0], {0}
-        stc     p14, c6, [r1], {1}
-        ldc2    5,   c5, [r2], {2}
-        stc2    p6,  c4, [r3], {3}
-        ldcl    7,   c3, [r4], {4}
-        stcl    p8,  c2, [r5], {5}
-        ldc2l   9,   c1, [r6], {6}
-        stc2l   p10, c0, [r7], {7}
-        @ using '11' below results in an (invalid) Neon vldmia instruction.
-        ldcl    12,  c8, [r8], {255}
-        stcl    p12, c9, [r9], {254}
-        mrrc    13,   0, r7, r0, cr4
-        mcrr    p14,  0, r7, r0, cr5
-        mrrc    15,  15, r7, r0, cr15
-        mcrr    p14, 15, r7, r0, cr14
-
-	# Extra instructions to allow for code alignment in arm-aout target.
-	nop
-	nop

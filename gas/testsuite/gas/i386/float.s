@@ -66,5 +66,3 @@
 	fdivrp
 	fdivrp	%st(3)
 	fdivrp	%st,%st(3)
-
-	.p2align	4,0

@@ -12,11 +12,3 @@ shlib_shlibcalled ()
 {
   return 5;
 }
-
-#ifndef XCOFF_TEST
-int
-shlib_overriddencall2 ()
-{
-  return 7;
-}
-#endif

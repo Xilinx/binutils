@@ -1,14 +1,12 @@
 /* resrc.c -- read and write Windows rc files.
-   Copyright 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2005, 2007, 2008
-   Free Software Foundation, Inc.
+   Copyright 1997, 1998 Free Software Foundation, Inc.
    Written by Ian Lance Taylor, Cygnus Support.
-   Rewritten by Kai Tietz, Onevision.
 
    This file is part of GNU Binutils.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
+   the Free Software Foundation; either version 2 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -18,70 +16,29 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston, MA
-   02110-1301, USA.  */
+   Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA
+   02111-1307, USA.  */
 
 /* This file contains functions that read and write Windows rc files.
    These are text files that represent resources.  */
 
-#include "sysdep.h"
 #include "bfd.h"
 #include "bucomm.h"
 #include "libiberty.h"
-#include "safe-ctype.h"
 #include "windres.h"
 
 #include <assert.h>
-#include <errno.h>
+#include <ctype.h>
 #include <sys/stat.h>
-#ifdef HAVE_UNISTD_H
-#include <unistd.h>
-#endif
 
-#ifdef HAVE_SYS_WAIT_H
-#include <sys/wait.h>
-#else /* ! HAVE_SYS_WAIT_H */
-#if ! defined (_WIN32) || defined (__CYGWIN__)
-#ifndef WIFEXITED
-#define WIFEXITED(w)	(((w)&0377) == 0)
-#endif
-#ifndef WIFSIGNALED
-#define WIFSIGNALED(w)	(((w)&0377) != 0177 && ((w)&~0377) == 0)
-#endif
-#ifndef WTERMSIG
-#define WTERMSIG(w)	((w) & 0177)
-#endif
-#ifndef WEXITSTATUS
-#define WEXITSTATUS(w)	(((w) >> 8) & 0377)
-#endif
-#else /* defined (_WIN32) && ! defined (__CYGWIN__) */
-#ifndef WIFEXITED
-#define WIFEXITED(w)	(((w) & 0xff) == 0)
-#endif
-#ifndef WIFSIGNALED
-#define WIFSIGNALED(w)	(((w) & 0xff) != 0 && ((w) & 0xff) != 0x7f)
-#endif
-#ifndef WTERMSIG
-#define WTERMSIG(w)	((w) & 0x7f)
-#endif
-#ifndef WEXITSTATUS
-#define WEXITSTATUS(w)	(((w) & 0xff00) >> 8)
-#endif
-#endif /* defined (_WIN32) && ! defined (__CYGWIN__) */
-#endif /* ! HAVE_SYS_WAIT_H */
-
-#ifndef STDOUT_FILENO
-#define STDOUT_FILENO 1
-#endif
-
-#if defined (_WIN32) && ! defined (__CYGWIN__)
+#if defined (_WIN32) && ! defined (__CYGWIN32__)
 #define popen _popen
 #define pclose _pclose
 #endif
 
 /* The default preprocessor.  */
 
-#define DEFAULT_PREPROCESSOR "gcc -E -xc -DRC_INVOKED"
+#define DEFAULT_PREPROCESSOR "gcc -E -xc-header -DRC_INVOKED"
 
 /* We read the directory entries in a cursor or icon file into
    instances of this structure.  */
@@ -89,11 +46,11 @@
 struct icondir
 {
   /* Width of image.  */
-  bfd_byte width;
+  unsigned char width;
   /* Height of image.  */
-  bfd_byte height;
+  unsigned char height;
   /* Number of colors in image.  */
-  bfd_byte colorcount;
+  unsigned char colorcount;
   union
   {
     struct
@@ -127,20 +84,11 @@ int rc_lineno;
 
 /* The pipe we are reading from, so that we can close it if we exit.  */
 
-FILE *cpp_pipe;
-
-/* The temporary file used if we're not using popen, so we can delete it
-   if we exit.  */
-
-static char *cpp_temp_file;
-
-/* Input stream is either a file or a pipe.  */
-
-static enum {ISTREAM_PIPE, ISTREAM_FILE} istream_type;
+static FILE *cpp_pipe;
 
 /* As we read the rc file, we attach information to this structure.  */
 
-static rc_res_directory *resources;
+static struct res_directory *resources;
 
 /* The number of cursor resources we have written out.  */
 
@@ -152,417 +100,68 @@ static int fonts;
 
 /* Font directory information.  */
 
-rc_fontdir *fontdirs;
+struct fontdir *fontdirs;
 
 /* Resource info to use for fontdirs.  */
 
-rc_res_res_info fontdirs_resinfo;
+struct res_res_info fontdirs_resinfo;
 
 /* The number of icon resources we have written out.  */
 
 static int icons;
 
-/* The windres target bfd .  */
+/* Local functions.  */
 
-static windres_bfd wrtarget =
-{
-  (bfd *) NULL, (asection *) NULL, WR_KIND_TARGET
-};
-
-/* Local functions for rcdata based resource definitions.  */
-
-static void define_font_rcdata (rc_res_id, const rc_res_res_info *,
-				rc_rcdata_item *);
-static void define_icon_rcdata (rc_res_id, const rc_res_res_info *,
-				rc_rcdata_item *);
-static void define_bitmap_rcdata (rc_res_id, const rc_res_res_info *,
-				  rc_rcdata_item *);
-static void define_cursor_rcdata (rc_res_id, const rc_res_res_info *,
-				  rc_rcdata_item *);
-static void define_fontdir_rcdata (rc_res_id, const rc_res_res_info *,
-				   rc_rcdata_item *);
-static void define_messagetable_rcdata (rc_res_id, const rc_res_res_info *,
-					rc_rcdata_item *);
-static rc_uint_type rcdata_copy (const rc_rcdata_item *, bfd_byte *);
-static bfd_byte *rcdata_render_as_buffer (const rc_rcdata_item *, rc_uint_type *);
-
-static int run_cmd (char *, const char *);
-static FILE *open_input_stream (char *);
-static FILE *look_for_default
-  (char *, const char *, int, const char *, const char *);
-static void close_input_stream (void);
-static void unexpected_eof (const char *);
-static int get_word (FILE *, const char *);
-static unsigned long get_long (FILE *, const char *);
-static void get_data (FILE *, bfd_byte *, rc_uint_type, const char *);
-static void define_fontdirs (void);
+static void close_pipe PARAMS ((void));
+static void unexpected_eof PARAMS ((const char *));
+static int get_word PARAMS ((FILE *, const char *));
+static unsigned long get_long PARAMS ((FILE *, const char *));
+static void get_data
+  PARAMS ((FILE *, unsigned char *, unsigned long, const char *));
+static void define_fontdirs PARAMS ((void));
 
-/* Run `cmd' and redirect the output to `redir'.  */
-
-static int
-run_cmd (char *cmd, const char *redir)
-{
-  char *s;
-  int pid, wait_status, retcode;
-  int i;
-  const char **argv;
-  char *errmsg_fmt, *errmsg_arg;
-  char *temp_base = choose_temp_base ();
-  int in_quote;
-  char sep;
-  int redir_handle = -1;
-  int stdout_save = -1;
-
-  /* Count the args.  */
-  i = 0;
-
-  for (s = cmd; *s; s++)
-    if (*s == ' ')
-      i++;
-
-  i++;
-  argv = alloca (sizeof (char *) * (i + 3));
-  i = 0;
-  s = cmd;
-
-  while (1)
-    {
-      while (*s == ' ' && *s != 0)
-	s++;
-
-      if (*s == 0)
-	break;
-
-      in_quote = (*s == '\'' || *s == '"');
-      sep = (in_quote) ? *s++ : ' ';
-      argv[i++] = s;
-
-      while (*s != sep && *s != 0)
-	s++;
-
-      if (*s == 0)
-	break;
-
-      *s++ = 0;
-
-      if (in_quote)
-	s++;
-    }
-  argv[i++] = NULL;
-
-  /* Setup the redirection.  We can't use the usual fork/exec and redirect
-     since we may be running on non-POSIX Windows host.  */
-
-  fflush (stdout);
-  fflush (stderr);
-
-  /* Open temporary output file.  */
-  redir_handle = open (redir, O_WRONLY | O_TRUNC | O_CREAT, 0666);
-  if (redir_handle == -1)
-    fatal (_("can't open temporary file `%s': %s"), redir,
-	   strerror (errno));
-
-  /* Duplicate the stdout file handle so it can be restored later.  */
-  stdout_save = dup (STDOUT_FILENO);
-  if (stdout_save == -1)
-    fatal (_("can't redirect stdout: `%s': %s"), redir, strerror (errno));
-
-  /* Redirect stdout to our output file.  */
-  dup2 (redir_handle, STDOUT_FILENO);
-
-  pid = pexecute (argv[0], (char * const *) argv, program_name, temp_base,
-		  &errmsg_fmt, &errmsg_arg, PEXECUTE_ONE | PEXECUTE_SEARCH);
-
-  /* Restore stdout to its previous setting.  */
-  dup2 (stdout_save, STDOUT_FILENO);
-
-  /* Close response file.  */
-  close (redir_handle);
-
-  if (pid == -1)
-    {
-      fatal (_("%s %s: %s"), errmsg_fmt, errmsg_arg, strerror (errno));
-      return 1;
-    }
-
-  retcode = 0;
-  pid = pwait (pid, &wait_status, 0);
-
-  if (pid == -1)
-    {
-      fatal (_("wait: %s"), strerror (errno));
-      retcode = 1;
-    }
-  else if (WIFSIGNALED (wait_status))
-    {
-      fatal (_("subprocess got fatal signal %d"), WTERMSIG (wait_status));
-      retcode = 1;
-    }
-  else if (WIFEXITED (wait_status))
-    {
-      if (WEXITSTATUS (wait_status) != 0)
-	{
-	  fatal (_("%s exited with status %d"), cmd,
-	         WEXITSTATUS (wait_status));
-	  retcode = 1;
-	}
-    }
-  else
-    retcode = 1;
-
-  return retcode;
-}
-
-static FILE *
-open_input_stream (char *cmd)
-{
-  if (istream_type == ISTREAM_FILE)
-    {
-      char *fileprefix;
-
-      fileprefix = choose_temp_base ();
-      cpp_temp_file = (char *) xmalloc (strlen (fileprefix) + 5);
-      sprintf (cpp_temp_file, "%s.irc", fileprefix);
-      free (fileprefix);
-
-      if (run_cmd (cmd, cpp_temp_file))
-	fatal (_("can't execute `%s': %s"), cmd, strerror (errno));
-
-      cpp_pipe = fopen (cpp_temp_file, FOPEN_RT);;
-      if (cpp_pipe == NULL)
-	fatal (_("can't open temporary file `%s': %s"),
-	       cpp_temp_file, strerror (errno));
-
-      if (verbose)
-	fprintf (stderr,
-	         _("Using temporary file `%s' to read preprocessor output\n"),
-		 cpp_temp_file);
-    }
-  else
-    {
-      cpp_pipe = popen (cmd, FOPEN_RT);
-      if (cpp_pipe == NULL)
-	fatal (_("can't popen `%s': %s"), cmd, strerror (errno));
-      if (verbose)
-	fprintf (stderr, _("Using popen to read preprocessor output\n"));
-    }
-
-  xatexit (close_input_stream);
-  return cpp_pipe;
-}
-
-/* Determine if FILENAME contains special characters that
-   can cause problems unless the entire filename is quoted.  */
-
-static int
-filename_need_quotes (const char *filename)
-{
-  if (filename == NULL || (filename[0] == '-' && filename[1] == 0))
-    return 0;
-
-  while (*filename != 0)
-    {
-      switch (*filename)
-        {
-        case '&':
-        case ' ':
-        case '<':
-        case '>':
-        case '|':
-        case '%':
-          return 1;
-        }
-      ++filename;
-    }
-  return 0;
-}
-
-/* Look for the preprocessor program.  */
-
-static FILE *
-look_for_default (char *cmd, const char *prefix, int end_prefix,
-		  const char *preprocargs, const char *filename)
-{
-  char *space;
-  int found;
-  struct stat s;
-  const char *fnquotes = (filename_need_quotes (filename) ? "\"" : "");
-
-  strcpy (cmd, prefix);
-
-  sprintf (cmd + end_prefix, "%s", DEFAULT_PREPROCESSOR);
-  space = strchr (cmd + end_prefix, ' ');
-  if (space)
-    *space = 0;
-
-  if (
-#if defined (__DJGPP__) || defined (__CYGWIN__) || defined (_WIN32)
-      strchr (cmd, '\\') ||
-#endif
-      strchr (cmd, '/'))
-    {
-      found = (stat (cmd, &s) == 0
-#ifdef HAVE_EXECUTABLE_SUFFIX
-	       || stat (strcat (cmd, EXECUTABLE_SUFFIX), &s) == 0
-#endif
-	       );
-
-      if (! found)
-	{
-	  if (verbose)
-	    fprintf (stderr, _("Tried `%s'\n"), cmd);
-	  return NULL;
-	}
-    }
-
-  strcpy (cmd, prefix);
-
-  sprintf (cmd + end_prefix, "%s %s %s%s%s",
-	   DEFAULT_PREPROCESSOR, preprocargs, fnquotes, filename, fnquotes);
-
-  if (verbose)
-    fprintf (stderr, _("Using `%s'\n"), cmd);
-
-  cpp_pipe = open_input_stream (cmd);
-  return cpp_pipe;
-}
-
 /* Read an rc file.  */
 
-rc_res_directory *
-read_rc_file (const char *filename, const char *preprocessor,
-	      const char *preprocargs, int language, int use_temp_file)
+struct res_directory *
+read_rc_file (filename, preprocessor, preprocargs, language)
+     const char *filename;
+     const char *preprocessor;
+     const char *preprocargs;
+     int language;
 {
   char *cmd;
-  const char *fnquotes = (filename_need_quotes (filename) ? "\"" : "");
 
-  if (filename == NULL)
-    filename = "-";
-  /* Setup the default resource import path taken from input file.  */
-  else if (strchr (filename, '/') != NULL || strchr (filename, '\\') != NULL)
-    {
-      char *edit, *dir;
-
-      if (filename[0] == '/'
-	  || filename[0] == '\\'
-	  || filename[1] == ':')
-        /* Absolute path.  */
-	edit = dir = xstrdup (filename);
-      else
-	{
-	  /* Relative path.  */
-	  edit = dir = xmalloc (strlen (filename) + 3);
-	  sprintf (dir, "./%s", filename);
-	}
-
-      /* Walk dir backwards stopping at the first directory separator.  */
-      edit += strlen (dir);
-      while (edit > dir && (edit[-1] != '\\' && edit[-1] != '/'))
-	{
-	  --edit;
-	  edit[0] = 0;
-	}
-
-      /* Cut off trailing slash.  */
-      --edit;
-      edit[0] = 0;
-
-      /* Convert all back slashes to forward slashes.  */
-      while ((edit = strchr (dir, '\\')) != NULL)
-	*edit = '/';
-
-      windres_add_include_dir (dir);
-    }
-
-  istream_type = (use_temp_file) ? ISTREAM_FILE : ISTREAM_PIPE;
+  if (preprocessor == NULL)
+    preprocessor = DEFAULT_PREPROCESSOR;
 
   if (preprocargs == NULL)
     preprocargs = "";
+  if (filename == NULL)
+    filename = "-";
 
-  if (preprocessor)
-    {
-      cmd = xmalloc (strlen (preprocessor)
-		     + strlen (preprocargs)
-		     + strlen (filename)
-		     + strlen (fnquotes) * 2
-		     + 10);
-      sprintf (cmd, "%s %s %s%s%s", preprocessor, preprocargs,
-	       fnquotes, filename, fnquotes);
+  cmd = xmalloc (strlen (preprocessor)
+		 + strlen (preprocargs)
+		 + strlen (filename)
+		 + 10);
+  sprintf (cmd, "%s %s %s", preprocessor, preprocargs, filename);
 
-      cpp_pipe = open_input_stream (cmd);
-    }
-  else
-    {
-      char *dash, *slash, *cp;
-
-      preprocessor = DEFAULT_PREPROCESSOR;
-
-      cmd = xmalloc (strlen (program_name)
-		     + strlen (preprocessor)
-		     + strlen (preprocargs)
-		     + strlen (filename)
-		     + strlen (fnquotes) * 2
-#ifdef HAVE_EXECUTABLE_SUFFIX
-		     + strlen (EXECUTABLE_SUFFIX)
-#endif
-		     + 10);
-
-
-      dash = slash = 0;
-      for (cp = program_name; *cp; cp++)
-	{
-	  if (*cp == '-')
-	    dash = cp;
-	  if (
-#if defined (__DJGPP__) || defined (__CYGWIN__) || defined(_WIN32)
-	      *cp == ':' || *cp == '\\' ||
-#endif
-	      *cp == '/')
-	    {
-	      slash = cp;
-	      dash = 0;
-	    }
-	}
-
-      cpp_pipe = 0;
-
-      if (dash)
-	{
-	  /* First, try looking for a prefixed gcc in the windres
-	     directory, with the same prefix as windres */
-
-	  cpp_pipe = look_for_default (cmd, program_name, dash - program_name + 1,
-				       preprocargs, filename);
-	}
-
-      if (slash && ! cpp_pipe)
-	{
-	  /* Next, try looking for a gcc in the same directory as
-             that windres */
-
-	  cpp_pipe = look_for_default (cmd, program_name, slash - program_name + 1,
-				       preprocargs, filename);
-	}
-
-      if (! cpp_pipe)
-	{
-	  /* Sigh, try the default */
-
-	  cpp_pipe = look_for_default (cmd, "", 0, preprocargs, filename);
-	}
-
-    }
-
+  cpp_pipe = popen (cmd, FOPEN_RT);
+  if (cpp_pipe == NULL)
+    fatal (_("can't popen `%s': %s"), cmd, strerror (errno));
   free (cmd);
+
+  xatexit (close_pipe);
 
   rc_filename = xstrdup (filename);
   rc_lineno = 1;
   if (language != -1)
     rcparse_set_language (language);
+  yyin = cpp_pipe;
   yyparse ();
-  rcparse_discard_strings ();
 
-  close_input_stream ();
+  if (pclose (cpp_pipe) != 0)
+    fprintf (stderr, _("%s: warning: preprocessor failed\n"), program_name);
+  cpp_pipe = NULL;
 
   if (fontdirs != NULL)
     define_fontdirs ();
@@ -573,52 +172,20 @@ read_rc_file (const char *filename, const char *preprocessor,
   return resources;
 }
 
-/* Close the input stream if it is open.  */
+/* Close the pipe if it is open.  This is called via xatexit.  */
 
-static void
-close_input_stream (void)
+void
+close_pipe ()
 {
-  if (istream_type == ISTREAM_FILE)
-    {
-      if (cpp_pipe != NULL)
-	fclose (cpp_pipe);
-
-      if (cpp_temp_file != NULL)
-	{
-	  int errno_save = errno;
-
-	  unlink (cpp_temp_file);
-	  errno = errno_save;
-	  free (cpp_temp_file);
-	}
-    }
-  else
-    {
-      if (cpp_pipe != NULL)
-        {
-	  int err;
-	  err = pclose (cpp_pipe);
-	  /* We are reading from a pipe, therefore we don't
-             know if cpp failed or succeeded until pclose.  */
-	  if (err != 0 || errno == ECHILD)
-	    {
-	      /* Since this is also run via xatexit, safeguard.  */
-	      cpp_pipe = NULL;
-	      cpp_temp_file = NULL;
-	      fatal (_("preprocessing failed."));
-	    }
-        }
-    }
-
-  /* Since this is also run via xatexit, safeguard.  */
-  cpp_pipe = NULL;
-  cpp_temp_file = NULL;
+  if (cpp_pipe != NULL)
+    pclose (cpp_pipe);
 }
 
 /* Report an error while reading an rc file.  */
 
 void
-yyerror (const char *msg)
+yyerror (msg)
+     const char *msg;
 {
   fatal ("%s:%d: %s", rc_filename, rc_lineno, msg);
 }
@@ -626,15 +193,17 @@ yyerror (const char *msg)
 /* Issue a warning while reading an rc file.  */
 
 void
-rcparse_warning (const char *msg)
+rcparse_warning (msg)
+     const char *msg;
 {
-  fprintf (stderr, _("%s:%d: %s\n"), rc_filename, rc_lineno, msg);
+  fprintf (stderr, "%s:%d: %s\n", rc_filename, rc_lineno, msg);
 }
 
 /* Die if we get an unexpected end of file.  */
 
 static void
-unexpected_eof (const char *msg)
+unexpected_eof (msg)
+     const char *msg;
 {
   fatal (_("%s: unexpected EOF"), msg);
 }
@@ -643,7 +212,9 @@ unexpected_eof (const char *msg)
    endian.  */
 
 static int
-get_word (FILE *e, const char *msg)
+get_word (e, msg)
+     FILE *e;
+     const char *msg;
 {
   int b1, b2;
 
@@ -658,7 +229,9 @@ get_word (FILE *e, const char *msg)
    endian.  */
 
 static unsigned long
-get_long (FILE *e, const char *msg)
+get_long (e, msg)
+     FILE *e;
+     const char *msg;
 {
   int b1, b2, b3, b4;
 
@@ -677,25 +250,30 @@ get_long (FILE *e, const char *msg)
 /* Read data from a file.  This is a wrapper to do error checking.  */
 
 static void
-get_data (FILE *e, bfd_byte *p, rc_uint_type c, const char *msg)
+get_data (e, p, c, msg)
+     FILE *e;
+     unsigned char *p;
+     unsigned long c;
+     const char *msg;
 {
-  rc_uint_type got; // $$$d
+  unsigned long got;
 
-  got = (rc_uint_type) fread (p, 1, c, e);
+  got = fread (p, 1, c, e);
   if (got == c)
     return;
 
-  fatal (_("%s: read of %lu returned %lu"),
-	 msg, (unsigned long) c, (unsigned long) got);
+  fatal (_("%s: read of %lu returned %lu"), msg, c, got);
 }
 
 /* Define an accelerator resource.  */
 
 void
-define_accelerator (rc_res_id id, const rc_res_res_info *resinfo,
-		    rc_accelerator *data)
+define_accelerator (id, resinfo, data)
+     struct res_id id;
+     const struct res_res_info *resinfo;
+     struct accelerator *data;
 {
-  rc_res_resource *r;
+  struct res_resource *r;
 
   r = define_standard_resource (&resources, RT_ACCELERATOR, id,
 				resinfo->language, 0);
@@ -711,15 +289,17 @@ define_accelerator (rc_res_id id, const rc_res_res_info *resinfo,
 #define BITMAP_SKIP (14)
 
 void
-define_bitmap (rc_res_id id, const rc_res_res_info *resinfo,
-	       const char *filename)
+define_bitmap (id, resinfo, filename)
+     struct res_id id;
+     const struct res_res_info *resinfo;
+     const char *filename;
 {
   FILE *e;
   char *real_filename;
   struct stat s;
-  bfd_byte *data;
-  rc_uint_type i;
-  rc_res_resource *r;
+  unsigned char *data;
+  int i;
+  struct res_resource *r;
 
   e = open_file_search (filename, FOPEN_RB, "bitmap file", &real_filename);
 
@@ -727,7 +307,7 @@ define_bitmap (rc_res_id id, const rc_res_res_info *resinfo,
     fatal (_("stat failed on bitmap file `%s': %s"), real_filename,
 	   strerror (errno));
 
-  data = (bfd_byte *) res_alloc (s.st_size - BITMAP_SKIP);
+  data = (unsigned char *) res_alloc (s.st_size - BITMAP_SKIP);
 
   for (i = 0; i < BITMAP_SKIP; i++)
     getc (e);
@@ -753,16 +333,18 @@ define_bitmap (rc_res_id id, const rc_res_res_info *resinfo,
    select one of the actual cursors.  */
 
 void
-define_cursor (rc_res_id id, const rc_res_res_info *resinfo,
-	       const char *filename)
+define_cursor (id, resinfo, filename)
+     struct res_id id;
+     const struct res_res_info *resinfo;
+     const char *filename;
 {
   FILE *e;
   char *real_filename;
   int type, count, i;
   struct icondir *icondirs;
   int first_cursor;
-  rc_res_resource *r;
-  rc_group_cursor *first, **pp;
+  struct res_resource *r;
+  struct group_cursor *first, **pp;
 
   e = open_file_search (filename, FOPEN_RB, "cursor file", &real_filename);
 
@@ -802,19 +384,19 @@ define_cursor (rc_res_id id, const rc_res_res_info *resinfo,
 
   for (i = 0; i < count; i++)
     {
-      bfd_byte *data;
-      rc_res_id name;
-      rc_cursor *c;
+      unsigned char *data;
+      struct res_id name;
+      struct cursor *c;
 
       if (fseek (e, icondirs[i].offset, SEEK_SET) != 0)
 	fatal (_("%s: fseek to %lu failed: %s"), real_filename,
 	       icondirs[i].offset, strerror (errno));
 
-      data = (bfd_byte *) res_alloc (icondirs[i].bytes);
+      data = (unsigned char *) res_alloc (icondirs[i].bytes);
 
       get_data (e, data, icondirs[i].bytes, real_filename);
 
-      c = (rc_cursor *) res_alloc (sizeof (rc_cursor));
+      c = (struct cursor *) res_alloc (sizeof *c);
       c->xhotspot = icondirs[i].u.cursor.xhotspot;
       c->yhotspot = icondirs[i].u.cursor.yhotspot;
       c->length = icondirs[i].bytes;
@@ -841,9 +423,9 @@ define_cursor (rc_res_id id, const rc_res_res_info *resinfo,
   pp = &first;
   for (i = 0; i < count; i++)
     {
-      rc_group_cursor *cg;
+      struct group_cursor *cg;
 
-      cg = (rc_group_cursor *) res_alloc (sizeof (rc_group_cursor));
+      cg = (struct group_cursor *) res_alloc (sizeof *cg);
       cg->next = NULL;
       cg->width = icondirs[i].width;
       cg->height = 2 * icondirs[i].height;
@@ -871,13 +453,15 @@ define_cursor (rc_res_id id, const rc_res_res_info *resinfo,
 /* Define a dialog resource.  */
 
 void
-define_dialog (rc_res_id id, const rc_res_res_info *resinfo,
-	       const rc_dialog *dialog)
+define_dialog (id, resinfo, dialog)
+     struct res_id id;
+     const struct res_res_info *resinfo;
+     const struct dialog *dialog;
 {
-  rc_dialog *copy;
-  rc_res_resource *r;
+  struct dialog *copy;
+  struct res_resource *r;
 
-  copy = (rc_dialog *) res_alloc (sizeof *copy);
+  copy = (struct dialog *) res_alloc (sizeof *copy);
   *copy = *dialog;
 
   r = define_standard_resource (&resources, RT_DIALOG, id,
@@ -890,15 +474,21 @@ define_dialog (rc_res_id id, const rc_res_res_info *resinfo,
 /* Define a dialog control.  This does not define a resource, but
    merely allocates and fills in a structure.  */
 
-rc_dialog_control *
-define_control (const rc_res_id iid, rc_uint_type id, rc_uint_type x,
-		rc_uint_type y, rc_uint_type width, rc_uint_type height,
-		const rc_res_id class, rc_uint_type style,
-		rc_uint_type exstyle)
+struct dialog_control *
+define_control (text, id, x, y, width, height, class, style, exstyle)
+     const char *text;
+     unsigned long id;
+     unsigned long x;
+     unsigned long y;
+     unsigned long width;
+     unsigned long height;
+     unsigned long class;
+     unsigned long style;
+     unsigned long exstyle;
 {
-  rc_dialog_control *n;
+  struct dialog_control *n;
 
-  n = (rc_dialog_control *) res_alloc (sizeof (rc_dialog_control));
+  n = (struct dialog_control *) res_alloc (sizeof *n);
   n->next = NULL;
   n->id = id;
   n->style = style;
@@ -907,37 +497,17 @@ define_control (const rc_res_id iid, rc_uint_type id, rc_uint_type x,
   n->y = y;
   n->width = width;
   n->height = height;
-  n->class = class;
-  n->text = iid;
+  n->class.named = 0;
+  n->class.u.id = class;
+  if (text != NULL)
+    res_string_to_id (&n->text, text);
+  else
+    {
+      n->text.named = 0;
+      n->text.u.id = 0;
+    }
   n->data = NULL;
   n->help = 0;
-
-  return n;
-}
-
-rc_dialog_control *
-define_icon_control (rc_res_id iid, rc_uint_type id, rc_uint_type x,
-		     rc_uint_type y, rc_uint_type style,
-		     rc_uint_type exstyle, rc_uint_type help,
-		     rc_rcdata_item *data, rc_dialog_ex *ex)
-{
-  rc_dialog_control *n;
-  rc_res_id tid;
-  rc_res_id cid;
-
-  if (style == 0)
-    style = SS_ICON | WS_CHILD | WS_VISIBLE;
-  res_string_to_id (&tid, "");
-  cid.named = 0;
-  cid.u.id = CTL_STATIC;
-  n = define_control (tid, id, x, y, 0, 0, cid, style, exstyle);
-  n->text = iid;
-  if (help && ! ex)
-    rcparse_warning (_("help ID requires DIALOGEX"));
-  if (data && ! ex)
-    rcparse_warning (_("control data requires DIALOGEX"));
-  n->help = help;
-  n->data = data;
 
   return n;
 }
@@ -945,28 +515,30 @@ define_icon_control (rc_res_id iid, rc_uint_type id, rc_uint_type x,
 /* Define a font resource.  */
 
 void
-define_font (rc_res_id id, const rc_res_res_info *resinfo,
-	     const char *filename)
+define_font (id, resinfo, filename)
+     struct res_id id;
+     const struct res_res_info *resinfo;
+     const char *filename;
 {
   FILE *e;
   char *real_filename;
   struct stat s;
-  bfd_byte *data;
-  rc_res_resource *r;
+  unsigned char *data;
+  struct res_resource *r;
   long offset;
   long fontdatalength;
-  bfd_byte *fontdata;
-  rc_fontdir *fd;
+  unsigned char *fontdata;
+  struct fontdir *fd;
   const char *device, *face;
-  rc_fontdir **pp;
+  struct fontdir **pp;
 
   e = open_file_search (filename, FOPEN_RB, "font file", &real_filename);
 
   if (stat (real_filename, &s) < 0)
-    fatal (_("stat failed on font file `%s': %s"), real_filename,
+    fatal (_("stat failed on bitmap file `%s': %s"), real_filename,
 	   strerror (errno));
 
-  data = (bfd_byte *) res_alloc (s.st_size);
+  data = (unsigned char *) res_alloc (s.st_size);
 
   get_data (e, data, s.st_size, real_filename);
 
@@ -1007,12 +579,12 @@ define_font (rc_res_id id, const rc_res_res_info *resinfo,
   ++fonts;
 
   fontdatalength = 58 + strlen (device) + strlen (face);
-  fontdata = (bfd_byte *) res_alloc (fontdatalength);
+  fontdata = (unsigned char *) res_alloc (fontdatalength);
   memcpy (fontdata, data, 56);
   strcpy ((char *) fontdata + 56, device);
   strcpy ((char *) fontdata + 57 + strlen (device), face);
 
-  fd = (rc_fontdir *) res_alloc (sizeof (rc_fontdir));
+  fd = (struct fontdir *) res_alloc (sizeof *fd);
   fd->next = NULL;
   fd->index = fonts;
   fd->length = fontdatalength;
@@ -1027,33 +599,14 @@ define_font (rc_res_id id, const rc_res_res_info *resinfo,
   fontdirs_resinfo = *resinfo;
 }
 
-static void
-define_font_rcdata (rc_res_id id,const rc_res_res_info *resinfo,
-		    rc_rcdata_item *data)
-{
-  rc_res_resource *r;
-  rc_uint_type len_data;
-  bfd_byte *pb_data;
-
-  r = define_standard_resource (&resources, RT_FONT, id,
-				resinfo->language, 0);
-
-  pb_data = rcdata_render_as_buffer (data, &len_data);
-
-  r->type = RES_TYPE_FONT;
-  r->u.data.length = len_data;
-  r->u.data.data = pb_data;
-  r->res_info = *resinfo;
-}
-
 /* Define the fontdirs resource.  This is called after the entire rc
    file has been parsed, if any font resources were seen.  */
 
 static void
-define_fontdirs (void)
+define_fontdirs ()
 {
-  rc_res_resource *r;
-  rc_res_id id;
+  struct res_resource *r;
+  struct res_id id;
 
   id.named = 0;
   id.u.id = 1;
@@ -1065,89 +618,6 @@ define_fontdirs (void)
   r->res_info = fontdirs_resinfo;
 }
 
-static bfd_byte *
-rcdata_render_as_buffer (const rc_rcdata_item *data, rc_uint_type *plen)
-{
-  const rc_rcdata_item *d;
-  bfd_byte *ret = NULL, *pret;
-  rc_uint_type len = 0;
-
-  for (d = data; d != NULL; d = d->next)
-    len += rcdata_copy (d, NULL);
-  if (len != 0)
-    {
-      ret = pret = (bfd_byte *) res_alloc (len);
-      for (d = data; d != NULL; d = d->next)
-	pret += rcdata_copy (d, pret);
-    }
-  if (plen)
-    *plen = len;
-  return ret;
-}
-
-static void
-define_fontdir_rcdata (rc_res_id id,const rc_res_res_info *resinfo,
-		       rc_rcdata_item *data)
-{
-  rc_res_resource *r;
-  rc_fontdir *fd, *fd_first, *fd_cur;
-  rc_uint_type len_data;
-  bfd_byte *pb_data;
-  rc_uint_type c;
-
-  fd_cur = fd_first = NULL;
-  r = define_standard_resource (&resources, RT_FONTDIR, id, 0x409, 0);
-
-  pb_data = rcdata_render_as_buffer (data, &len_data);
-
-  if (pb_data)
-    {
-      rc_uint_type off = 2;
-      c = windres_get_16 (&wrtarget, pb_data, len_data);
-      for (; c > 0; c--)
-	{
-	  size_t len;
-	  rc_uint_type safe_pos = off;
-	  const struct bin_fontdir_item *bfi;
-
-	  bfi = (const struct bin_fontdir_item *) pb_data + off;
-	  fd = (rc_fontdir *) res_alloc (sizeof (rc_fontdir));
-	  fd->index = windres_get_16 (&wrtarget, bfi->index, len_data - off);
-	  fd->data = pb_data + off;
-	  off += 56;
-	  len = strlen ((char *) bfi->device_name) + 1;
-	  off += (rc_uint_type) len;
-	  off += (rc_uint_type) strlen ((char *) bfi->device_name + len) + 1;
-	  fd->length = (off - safe_pos);
-	  fd->next = NULL;
-	  if (fd_first == NULL)
-	    fd_first = fd;
-	  else
-	    fd_cur->next = fd;
-	  fd_cur = fd;
-	}
-    }
-  r->type = RES_TYPE_FONTDIR;
-  r->u.fontdir = fd_first;
-  r->res_info = *resinfo;
-}
-
-static void define_messagetable_rcdata (rc_res_id id, const rc_res_res_info *resinfo,
-					rc_rcdata_item *data)
-{
-  rc_res_resource *r;
-  rc_uint_type len_data;
-  bfd_byte *pb_data;
-
-  r = define_standard_resource (&resources, RT_MESSAGETABLE, id, resinfo->language, 0);
-
-  pb_data = rcdata_render_as_buffer (data, &len_data);
-  r->type = RES_TYPE_MESSAGETABLE;
-  r->u.data.length = len_data;
-  r->u.data.data = pb_data;
-  r->res_info = *resinfo;
-}
-
 /* Define an icon resource.  An icon file may contain a set of
    bitmaps, each representing the same icon at various different
    resolutions.  They each get written out with a different ID.  The
@@ -1155,16 +625,18 @@ static void define_messagetable_rcdata (rc_res_id id, const rc_res_res_info *res
    select one of the actual icon bitmaps.  */
 
 void
-define_icon (rc_res_id id, const rc_res_res_info *resinfo,
-	     const char *filename)
+define_icon (id, resinfo, filename)
+     struct res_id id;
+     const struct res_res_info *resinfo;
+     const char *filename;
 {
   FILE *e;
   char *real_filename;
   int type, count, i;
   struct icondir *icondirs;
   int first_icon;
-  rc_res_resource *r;
-  rc_group_icon *first, **pp;
+  struct res_resource *r;
+  struct group_icon *first, **pp;
 
   e = open_file_search (filename, FOPEN_RB, "icon file", &real_filename);
 
@@ -1203,14 +675,14 @@ define_icon (rc_res_id id, const rc_res_res_info *resinfo,
 
   for (i = 0; i < count; i++)
     {
-      bfd_byte *data;
-      rc_res_id name;
+      unsigned char *data;
+      struct res_id name;
 
       if (fseek (e, icondirs[i].offset, SEEK_SET) != 0)
 	fatal (_("%s: fseek to %lu failed: %s"), real_filename,
 	       icondirs[i].offset, strerror (errno));
 
-      data = (bfd_byte *) res_alloc (icondirs[i].bytes);
+      data = (unsigned char *) res_alloc (icondirs[i].bytes);
 
       get_data (e, data, icondirs[i].bytes, real_filename);
 
@@ -1236,32 +708,22 @@ define_icon (rc_res_id id, const rc_res_res_info *resinfo,
   pp = &first;
   for (i = 0; i < count; i++)
     {
-      rc_group_icon *cg;
+      struct group_icon *cg;
 
       /* For some reason, at least in some files the planes and bits
          are zero.  We instead set them from the color.  This is
          copied from rcl.  */
 
-      cg = (rc_group_icon *) res_alloc (sizeof (rc_group_icon));
+      cg = (struct group_icon *) res_alloc (sizeof *cg);
       cg->next = NULL;
       cg->width = icondirs[i].width;
       cg->height = icondirs[i].height;
       cg->colors = icondirs[i].colorcount;
 
-      if (icondirs[i].u.icon.planes)
-	cg->planes = icondirs[i].u.icon.planes;
-      else
-	cg->planes = 1;
-
-      if (icondirs[i].u.icon.bits)
-	cg->bits = icondirs[i].u.icon.bits;
-      else
-	{
-	  cg->bits = 0;
-
-	  while ((1L << cg->bits) < cg->colors)
-	    ++cg->bits;
-	}
+      cg->planes = 1;
+      cg->bits = 0;
+      while ((1 << cg->bits) < cg->colors)
+	++cg->bits;
 
       cg->bytes = icondirs[i].bytes;
       cg->index = first_icon + i + 1;
@@ -1279,180 +741,18 @@ define_icon (rc_res_id id, const rc_res_res_info *resinfo,
   r->res_info = *resinfo;
 }
 
-static void
-define_group_icon_rcdata (rc_res_id id, const rc_res_res_info *resinfo,
-			  rc_rcdata_item *data)
-{
-  rc_res_resource *r;
-  rc_group_icon *cg, *first, *cur;
-  rc_uint_type len_data;
-  bfd_byte *pb_data;
-
-  pb_data = rcdata_render_as_buffer (data, &len_data);
-
-  cur = NULL;
-  first = NULL;
-
-  while (len_data >= 6)
-    {
-      int c, i;
-      unsigned short type;
-      type = windres_get_16 (&wrtarget, pb_data + 2, len_data - 2);
-      if (type != 1)
-	fatal (_("unexpected group icon type %d"), type);
-      c = windres_get_16 (&wrtarget, pb_data + 4, len_data - 4);
-      len_data -= 6;
-      pb_data += 6;
-
-      for (i = 0; i < c; i++)
-	{
-	  if (len_data < 14)
-	    fatal ("too small group icon rcdata");
-	  cg = (rc_group_icon *) res_alloc (sizeof (rc_group_icon));
-	  cg->next = NULL;
-	  cg->width = pb_data[0];
-	  cg->height = pb_data[1];
-	  cg->colors = pb_data[2];
-	  cg->planes = windres_get_16 (&wrtarget, pb_data + 4, len_data - 4);
-	  cg->bits =  windres_get_16 (&wrtarget, pb_data + 6, len_data - 6);
-	  cg->bytes = windres_get_32 (&wrtarget, pb_data + 8, len_data - 8);
-	  cg->index = windres_get_16 (&wrtarget, pb_data + 12, len_data - 12);
-	  if (! first)
-	    first = cg;
-	  else
-	    cur->next = cg;
-	  cur = cg;
-	  pb_data += 14;
-	  len_data -= 14;
-	}
-    }
-  r = define_standard_resource (&resources, RT_GROUP_ICON, id,
-				resinfo->language, 0);
-  r->type = RES_TYPE_GROUP_ICON;
-  r->u.group_icon = first;
-  r->res_info = *resinfo;
-}
-
-static void
-define_group_cursor_rcdata (rc_res_id id, const rc_res_res_info *resinfo,
-			    rc_rcdata_item *data)
-{
-  rc_res_resource *r;
-  rc_group_cursor *cg, *first, *cur;
-  rc_uint_type len_data;
-  bfd_byte *pb_data;
-
-  pb_data = rcdata_render_as_buffer (data, &len_data);
-
-  first = cur = NULL;
-
-  while (len_data >= 6)
-    {
-      int c, i;
-      unsigned short type;
-      type = windres_get_16 (&wrtarget, pb_data + 2, len_data - 2);
-      if (type != 2)
-	fatal (_("unexpected group cursor type %d"), type);
-      c = windres_get_16 (&wrtarget, pb_data + 4, len_data - 4);
-      len_data -= 6;
-      pb_data += 6;
-
-      for (i = 0; i < c; i++)
-	{
-	  if (len_data < 14)
-	    fatal ("too small group icon rcdata");
-	  cg = (rc_group_cursor *) res_alloc (sizeof (rc_group_cursor));
-	  cg->next = NULL;
-	  cg->width = windres_get_16 (&wrtarget, pb_data, len_data);
-	  cg->height = windres_get_16 (&wrtarget, pb_data + 2, len_data - 2);
-	  cg->planes = windres_get_16 (&wrtarget, pb_data + 4, len_data - 4);
-	  cg->bits =  windres_get_16 (&wrtarget, pb_data + 6, len_data - 6);
-	  cg->bytes = windres_get_32 (&wrtarget, pb_data + 8, len_data - 8);
-	  cg->index = windres_get_16 (&wrtarget, pb_data + 12, len_data - 12);
-	  if (! first)
-	    first = cg;
-	  else
-	    cur->next = cg;
-	  cur = cg;
-	  pb_data += 14;
-	  len_data -= 14;
-	}
-    }
-
-  r = define_standard_resource (&resources, RT_GROUP_ICON, id,
-				resinfo->language, 0);
-  r->type = RES_TYPE_GROUP_CURSOR;
-  r->u.group_cursor = first;
-  r->res_info = *resinfo;
-}
-
-static void
-define_cursor_rcdata (rc_res_id id, const rc_res_res_info *resinfo,
-		      rc_rcdata_item *data)
-{
-  rc_cursor *c;
-  rc_res_resource *r;
-  rc_uint_type len_data;
-  bfd_byte *pb_data;
-
-  pb_data = rcdata_render_as_buffer (data, &len_data);
-
-  c = (rc_cursor *) res_alloc (sizeof (rc_cursor));
-  c->xhotspot = windres_get_16 (&wrtarget, pb_data, len_data);
-  c->yhotspot = windres_get_16 (&wrtarget, pb_data + 2, len_data - 2);
-  c->length = len_data - BIN_CURSOR_SIZE;
-  c->data = (const bfd_byte *) (data + BIN_CURSOR_SIZE);
-
-  r = define_standard_resource (&resources, RT_CURSOR, id, resinfo->language, 0);
-  r->type = RES_TYPE_CURSOR;
-  r->u.cursor = c;
-  r->res_info = *resinfo;
-}
-
-static void
-define_bitmap_rcdata (rc_res_id id, const rc_res_res_info *resinfo,
-		      rc_rcdata_item *data)
-{
-  rc_res_resource *r;
-  rc_uint_type len_data;
-  bfd_byte *pb_data;
-
-  pb_data = rcdata_render_as_buffer (data, &len_data);
-
-  r = define_standard_resource (&resources, RT_BITMAP, id, resinfo->language, 0);
-  r->type = RES_TYPE_BITMAP;
-  r->u.data.length = len_data;
-  r->u.data.data = pb_data;
-  r->res_info = *resinfo;
-}
-
-static void
-define_icon_rcdata (rc_res_id id, const rc_res_res_info *resinfo,
-		    rc_rcdata_item *data)
-{
-  rc_res_resource *r;
-  rc_uint_type len_data;
-  bfd_byte *pb_data;
-
-  pb_data = rcdata_render_as_buffer (data, &len_data);
-
-  r = define_standard_resource (&resources, RT_ICON, id, resinfo->language, 0);
-  r->type = RES_TYPE_ICON;
-  r->u.data.length = len_data;
-  r->u.data.data = pb_data;
-  r->res_info = *resinfo;
-}
-
 /* Define a menu resource.  */
 
 void
-define_menu (rc_res_id id, const rc_res_res_info *resinfo,
-	     rc_menuitem *menuitems)
+define_menu (id, resinfo, menuitems)
+     struct res_id id;
+     const struct res_res_info *resinfo;
+     struct menuitem *menuitems;
 {
-  rc_menu *m;
-  rc_res_resource *r;
+  struct menu *m;
+  struct res_resource *r;
 
-  m = (rc_menu *) res_alloc (sizeof (rc_menu));
+  m = (struct menu *) res_alloc (sizeof *m);
   m->items = menuitems;
   m->help = 0;
 
@@ -1465,19 +765,26 @@ define_menu (rc_res_id id, const rc_res_res_info *resinfo,
 /* Define a menu item.  This does not define a resource, but merely
    allocates and fills in a structure.  */
 
-rc_menuitem *
-define_menuitem (const unichar *text, rc_uint_type menuid, rc_uint_type type,
-		 rc_uint_type state, rc_uint_type help,
-		 rc_menuitem *menuitems)
+struct menuitem *
+define_menuitem (text, menuid, type, state, help, menuitems)
+     const char *text;
+     int menuid;
+     unsigned long type;
+     unsigned long state;
+     unsigned long help;
+     struct menuitem *menuitems;
 {
-  rc_menuitem *mi;
+  struct menuitem *mi;
 
-  mi = (rc_menuitem *) res_alloc (sizeof (rc_menuitem));
+  mi = (struct menuitem *) res_alloc (sizeof *mi);
   mi->next = NULL;
   mi->type = type;
   mi->state = state;
   mi->id = menuid;
-  mi->text = unichar_dup (text);
+  if (text == NULL)
+    mi->text = NULL;
+  else
+    unicode_from_ascii ((int *) NULL, &mi->text, text);
   mi->help = help;
   mi->popup = menuitems;
   return mi;
@@ -1486,14 +793,16 @@ define_menuitem (const unichar *text, rc_uint_type menuid, rc_uint_type type,
 /* Define a messagetable resource.  */
 
 void
-define_messagetable (rc_res_id id, const rc_res_res_info *resinfo,
-		     const char *filename)
+define_messagetable (id, resinfo, filename)
+     struct res_id id;
+     const struct res_res_info *resinfo;
+     const char *filename;
 {
   FILE *e;
   char *real_filename;
   struct stat s;
-  bfd_byte *data;
-  rc_res_resource *r;
+  unsigned char *data;
+  struct res_resource *r;
 
   e = open_file_search (filename, FOPEN_RB, "messagetable file",
 			&real_filename);
@@ -1502,7 +811,7 @@ define_messagetable (rc_res_id id, const rc_res_res_info *resinfo,
     fatal (_("stat failed on bitmap file `%s': %s"), real_filename,
 	   strerror (errno));
 
-  data = (bfd_byte *) res_alloc (s.st_size);
+  data = (unsigned char *) res_alloc (s.st_size);
 
   get_data (e, data, s.st_size, real_filename);
 
@@ -1521,10 +830,12 @@ define_messagetable (rc_res_id id, const rc_res_res_info *resinfo,
 /* Define an rcdata resource.  */
 
 void
-define_rcdata (rc_res_id id, const rc_res_res_info *resinfo,
-	       rc_rcdata_item *data)
+define_rcdata (id, resinfo, data)
+     struct res_id id;
+     const struct res_res_info *resinfo;
+     struct rcdata_item *data;
 {
-  rc_res_resource *r;
+  struct res_resource *r;
 
   r = define_standard_resource (&resources, RT_RCDATA, id,
 				resinfo->language, 0);
@@ -1535,13 +846,15 @@ define_rcdata (rc_res_id id, const rc_res_res_info *resinfo,
 
 /* Create an rcdata item holding a string.  */
 
-rc_rcdata_item *
-define_rcdata_string (const char *string, rc_uint_type len)
+struct rcdata_item *
+define_rcdata_string (string, len)
+     const char *string;
+     unsigned long len;
 {
-  rc_rcdata_item *ri;
+  struct rcdata_item *ri;
   char *s;
 
-  ri = (rc_rcdata_item *) res_alloc (sizeof (rc_rcdata_item));
+  ri = (struct rcdata_item *) res_alloc (sizeof *ri);
   ri->next = NULL;
   ri->type = RCDATA_STRING;
   ri->u.string.length = len;
@@ -1552,33 +865,16 @@ define_rcdata_string (const char *string, rc_uint_type len)
   return ri;
 }
 
-/* Create an rcdata item holding a unicode string.  */
-
-rc_rcdata_item *
-define_rcdata_unistring (const unichar *string, rc_uint_type len)
-{
-  rc_rcdata_item *ri;
-  unichar *s;
-
-  ri = (rc_rcdata_item *) res_alloc (sizeof (rc_rcdata_item));
-  ri->next = NULL;
-  ri->type = RCDATA_WSTRING;
-  ri->u.wstring.length = len;
-  s = (unichar *) res_alloc (len * sizeof (unichar));
-  memcpy (s, string, len * sizeof (unichar));
-  ri->u.wstring.w = s;
-
-  return ri;
-}
-
 /* Create an rcdata item holding a number.  */
 
-rc_rcdata_item *
-define_rcdata_number (rc_uint_type val, int dword)
+struct rcdata_item *
+define_rcdata_number (val, dword)
+     unsigned long val;
+     int dword;
 {
-  rc_rcdata_item *ri;
+  struct rcdata_item *ri;
 
-  ri = (rc_rcdata_item *) res_alloc (sizeof (rc_rcdata_item));
+  ri = (struct rcdata_item *) res_alloc (sizeof *ri);
   ri->next = NULL;
   ri->type = dword ? RCDATA_DWORD : RCDATA_WORD;
   ri->u.word = val;
@@ -1590,11 +886,13 @@ define_rcdata_number (rc_uint_type val, int dword)
    which appears in a STRINGTABLE statement.  */
 
 void
-define_stringtable (const rc_res_res_info *resinfo,
-		    rc_uint_type stringid, const unichar *string)
+define_stringtable (resinfo, stringid, string)
+     const struct res_res_info *resinfo;
+     unsigned long stringid;
+     const char *string;
 {
-  rc_res_id id;
-  rc_res_resource *r;
+  struct res_id id;
+  struct res_resource *r;
 
   id.named = 0;
   id.u.id = (stringid >> 4) + 1;
@@ -1606,8 +904,8 @@ define_stringtable (const rc_res_res_info *resinfo,
       int i;
 
       r->type = RES_TYPE_STRINGTABLE;
-      r->u.stringtable = ((rc_stringtable *)
-			  res_alloc (sizeof (rc_stringtable)));
+      r->u.stringtable = ((struct stringtable *)
+			  res_alloc (sizeof (struct stringtable)));
       for (i = 0; i < 16; i++)
 	{
 	  r->u.stringtable->strings[i].length = 0;
@@ -1617,149 +915,57 @@ define_stringtable (const rc_res_res_info *resinfo,
       r->res_info = *resinfo;
     }
 
-  r->u.stringtable->strings[stringid & 0xf].length = unichar_len (string);
-  r->u.stringtable->strings[stringid & 0xf].string = unichar_dup (string);
-}
-
-void
-define_toolbar (rc_res_id id, rc_res_res_info *resinfo, rc_uint_type width, rc_uint_type height,
-		rc_toolbar_item *items)
-{
-  rc_toolbar *t;
-  rc_res_resource *r;
-
-  t = (rc_toolbar *) res_alloc (sizeof (rc_toolbar));
-  t->button_width = width;
-  t->button_height = height;
-  t->nitems = 0;
-  t->items = items;
-  while (items != NULL)
-  {
-    t->nitems+=1;
-    items = items->next;
-  }
-  r = define_standard_resource (&resources, RT_TOOLBAR, id, resinfo->language, 0);
-  r->type = RES_TYPE_TOOLBAR;
-  r->u.toolbar = t;
-  r->res_info = *resinfo;
+  unicode_from_ascii (&r->u.stringtable->strings[stringid & 0xf].length,
+		      &r->u.stringtable->strings[stringid & 0xf].string,
+		      string);
 }
 
 /* Define a user data resource where the data is in the rc file.  */
 
 void
-define_user_data (rc_res_id id, rc_res_id type,
-		  const rc_res_res_info *resinfo,
-		  rc_rcdata_item *data)
+define_user_data (id, type, resinfo, data)
+     struct res_id id;
+     struct res_id type;
+     const struct res_res_info *resinfo;
+     struct rcdata_item *data;
 {
-  rc_res_id ids[3];
-  rc_res_resource *r;
-  bfd_byte *pb_data;
-  rc_uint_type len_data;
+  struct res_id ids[3];
+  struct res_resource *r;
 
-  /* We have to check if the binary data is parsed specially.  */
-  if (type.named == 0)
-    {
-      switch (type.u.id)
-      {
-      case RT_FONTDIR:
-	define_fontdir_rcdata (id, resinfo, data);
-	return;
-      case RT_FONT:
-	define_font_rcdata (id, resinfo, data);
-	return;
-      case RT_ICON:
-	define_icon_rcdata (id, resinfo, data);
-	return;
-      case RT_BITMAP:
-	define_bitmap_rcdata (id, resinfo, data);
-	return;
-      case RT_CURSOR:
-	define_cursor_rcdata (id, resinfo, data);
-	return;
-      case RT_GROUP_ICON:
-	define_group_icon_rcdata (id, resinfo, data);
-	return;
-      case RT_GROUP_CURSOR:
-	define_group_cursor_rcdata (id, resinfo, data);
-	return;
-      case RT_MESSAGETABLE:
-	define_messagetable_rcdata (id, resinfo, data);
-	return;
-      default:
-	/* Treat as normal user-data.  */
-	break;
-      }
-    }
   ids[0] = type;
   ids[1] = id;
   ids[2].named = 0;
   ids[2].u.id = resinfo->language;
 
-  r = define_resource (& resources, 3, ids, 0);
+  r = define_resource (&resources, 3, ids, 0);
   r->type = RES_TYPE_USERDATA;
-  r->u.userdata = ((rc_rcdata_item *)
-		   res_alloc (sizeof (rc_rcdata_item)));
-  r->u.userdata->next = NULL;
-  r->u.userdata->type = RCDATA_BUFFER;
-  pb_data = rcdata_render_as_buffer (data, &len_data);
-  r->u.userdata->u.buffer.length = len_data;
-  r->u.userdata->u.buffer.data = pb_data;
+  r->u.userdata = data;
   r->res_info = *resinfo;
-}
-
-void
-define_rcdata_file (rc_res_id id, const rc_res_res_info *resinfo,
-		    const char *filename)
-{
-  rc_rcdata_item *ri;
-  FILE *e;
-  char *real_filename;
-  struct stat s;
-  bfd_byte *data;
-
-  e = open_file_search (filename, FOPEN_RB, "file", &real_filename);
-
-
-  if (stat (real_filename, &s) < 0)
-    fatal (_("stat failed on file `%s': %s"), real_filename,
-	   strerror (errno));
-
-  data = (bfd_byte *) res_alloc (s.st_size);
-
-  get_data (e, data, s.st_size, real_filename);
-
-  fclose (e);
-  free (real_filename);
-
-  ri = (rc_rcdata_item *) res_alloc (sizeof (rc_rcdata_item));
-  ri->next = NULL;
-  ri->type = RCDATA_BUFFER;
-  ri->u.buffer.length = s.st_size;
-  ri->u.buffer.data = data;
-
-  define_rcdata (id, resinfo, ri);
 }
 
 /* Define a user data resource where the data is in a file.  */
 
 void
-define_user_file (rc_res_id id, rc_res_id type,
-		  const rc_res_res_info *resinfo, const char *filename)
+define_user_file (id, type, resinfo, filename)
+     struct res_id id;
+     struct res_id type;
+     const struct res_res_info *resinfo;
+     const char *filename;
 {
   FILE *e;
   char *real_filename;
   struct stat s;
-  bfd_byte *data;
-  rc_res_id ids[3];
-  rc_res_resource *r;
+  unsigned char *data;
+  struct res_id ids[3];
+  struct res_resource *r;
 
-  e = open_file_search (filename, FOPEN_RB, "file", &real_filename);
+  e = open_file_search (filename, FOPEN_RB, "font file", &real_filename);
 
   if (stat (real_filename, &s) < 0)
-    fatal (_("stat failed on file `%s': %s"), real_filename,
+    fatal (_("stat failed on bitmap file `%s': %s"), real_filename,
 	   strerror (errno));
 
-  data = (bfd_byte *) res_alloc (s.st_size);
+  data = (unsigned char *) res_alloc (s.st_size);
 
   get_data (e, data, s.st_size, real_filename);
 
@@ -1773,8 +979,8 @@ define_user_file (rc_res_id id, rc_res_id type,
 
   r = define_resource (&resources, 3, ids, 0);
   r->type = RES_TYPE_USERDATA;
-  r->u.userdata = ((rc_rcdata_item *)
-		   res_alloc (sizeof (rc_rcdata_item)));
+  r->u.userdata = ((struct rcdata_item *)
+		   res_alloc (sizeof (struct rcdata_item)));
   r->u.userdata->next = NULL;
   r->u.userdata->type = RCDATA_BUFFER;
   r->u.userdata->u.buffer.length = s.st_size;
@@ -1785,16 +991,18 @@ define_user_file (rc_res_id id, rc_res_id type,
 /* Define a versioninfo resource.  */
 
 void
-define_versioninfo (rc_res_id id, rc_uint_type language,
-		    rc_fixed_versioninfo *fixedverinfo,
-		    rc_ver_info *verinfo)
+define_versioninfo (id, language, fixedverinfo, verinfo)
+     struct res_id id;
+     int language;
+     struct fixed_versioninfo *fixedverinfo;
+     struct ver_info *verinfo;
 {
-  rc_res_resource *r;
+  struct res_resource *r;
 
   r = define_standard_resource (&resources, RT_VERSION, id, language, 0);
   r->type = RES_TYPE_VERSIONINFO;
-  r->u.versioninfo = ((rc_versioninfo *)
-		      res_alloc (sizeof (rc_versioninfo)));
+  r->u.versioninfo = ((struct versioninfo *)
+		      res_alloc (sizeof (struct versioninfo)));
   r->u.versioninfo->fixed = fixedverinfo;
   r->u.versioninfo->var = verinfo;
   r->res_info.language = language;
@@ -1802,16 +1010,18 @@ define_versioninfo (rc_res_id id, rc_uint_type language,
 
 /* Add string version info to a list of version information.  */
 
-rc_ver_info *
-append_ver_stringfileinfo (rc_ver_info *verinfo, const char *language,
-			   rc_ver_stringinfo *strings)
+struct ver_info *
+append_ver_stringfileinfo (verinfo, language, strings)
+     struct ver_info *verinfo;
+     const char *language;
+     struct ver_stringinfo *strings;
 {
-  rc_ver_info *vi, **pp;
+  struct ver_info *vi, **pp;
 
-  vi = (rc_ver_info *) res_alloc (sizeof (rc_ver_info));
+  vi = (struct ver_info *) res_alloc (sizeof *vi);
   vi->next = NULL;
   vi->type = VERINFO_STRING;
-  unicode_from_ascii ((rc_uint_type *) NULL, &vi->u.string.language, language);
+  unicode_from_ascii ((int *) NULL, &vi->u.string.language, language);
   vi->u.string.strings = strings;
 
   for (pp = &verinfo; *pp != NULL; pp = &(*pp)->next)
@@ -1823,16 +1033,18 @@ append_ver_stringfileinfo (rc_ver_info *verinfo, const char *language,
 
 /* Add variable version info to a list of version information.  */
 
-rc_ver_info *
-append_ver_varfileinfo (rc_ver_info *verinfo, const unichar *key,
-			rc_ver_varinfo *var)
+struct ver_info *
+append_ver_varfileinfo (verinfo, key, var)
+     struct ver_info *verinfo;
+     const char *key;
+     struct ver_varinfo *var;
 {
-  rc_ver_info *vi, **pp;
+  struct ver_info *vi, **pp;
 
-  vi = (rc_ver_info *) res_alloc (sizeof *vi);
+  vi = (struct ver_info *) res_alloc (sizeof *vi);
   vi->next = NULL;
   vi->type = VERINFO_VAR;
-  vi->u.var.key = unichar_dup (key);
+  unicode_from_ascii ((int *) NULL, &vi->u.var.key, key);
   vi->u.var.var = var;
 
   for (pp = &verinfo; *pp != NULL; pp = &(*pp)->next)
@@ -1844,16 +1056,18 @@ append_ver_varfileinfo (rc_ver_info *verinfo, const unichar *key,
 
 /* Append version string information to a list.  */
 
-rc_ver_stringinfo *
-append_verval (rc_ver_stringinfo *strings, const unichar *key,
-	       const unichar *value)
+struct ver_stringinfo *
+append_verval (strings, key, value)
+     struct ver_stringinfo *strings;
+     const char *key;
+     const char *value;
 {
-  rc_ver_stringinfo *vs, **pp;
+  struct ver_stringinfo *vs, **pp;
 
-  vs = (rc_ver_stringinfo *) res_alloc (sizeof (rc_ver_stringinfo));
+  vs = (struct ver_stringinfo *) res_alloc (sizeof *vs);
   vs->next = NULL;
-  vs->key = unichar_dup (key);
-  vs->value = unichar_dup (value);
+  unicode_from_ascii ((int *) NULL, &vs->key, key);
+  unicode_from_ascii ((int *) NULL, &vs->value, value);
 
   for (pp = &strings; *pp != NULL; pp = &(*pp)->next)
     ;
@@ -1864,13 +1078,15 @@ append_verval (rc_ver_stringinfo *strings, const unichar *key,
 
 /* Append version variable information to a list.  */
 
-rc_ver_varinfo *
-append_vertrans (rc_ver_varinfo *var, rc_uint_type language,
-		 rc_uint_type charset)
+struct ver_varinfo *
+append_vertrans (var, language, charset)
+     struct ver_varinfo *var;
+     unsigned long language;
+     unsigned long charset;
 {
-  rc_ver_varinfo *vv, **pp;
+  struct ver_varinfo *vv, **pp;
 
-  vv = (rc_ver_varinfo *) res_alloc (sizeof (rc_ver_varinfo));
+  vv = (struct ver_varinfo *) res_alloc (sizeof *vv);
   vv->next = NULL;
   vv->language = language;
   vv->charset = charset;
@@ -1884,34 +1100,42 @@ append_vertrans (rc_ver_varinfo *var, rc_uint_type language,
 
 /* Local functions used to write out an rc file.  */
 
-static void indent (FILE *, int);
-static void write_rc_directory (FILE *, const rc_res_directory *, const rc_res_id *,
-				const rc_res_id *, rc_uint_type *, int);
-static void write_rc_subdir (FILE *, const rc_res_entry *, const rc_res_id *,
-			     const rc_res_id *, rc_uint_type *, int);
-static void write_rc_resource (FILE *, const rc_res_id *, const rc_res_id *,
-			       const rc_res_resource *, rc_uint_type *);
-static void write_rc_accelerators (FILE *, const rc_accelerator *);
-static void write_rc_cursor (FILE *, const rc_cursor *);
-static void write_rc_group_cursor (FILE *, const rc_group_cursor *);
-static void write_rc_dialog (FILE *, const rc_dialog *);
-static void write_rc_dialog_control (FILE *, const rc_dialog_control *);
-static void write_rc_fontdir (FILE *, const rc_fontdir *);
-static void write_rc_group_icon (FILE *, const rc_group_icon *);
-static void write_rc_menu (FILE *, const rc_menu *, int);
-static void write_rc_toolbar (FILE *, const rc_toolbar *);
-static void write_rc_menuitems (FILE *, const rc_menuitem *, int, int);
-static void write_rc_messagetable (FILE *, rc_uint_type , const bfd_byte *);
-
-static void write_rc_datablock (FILE *, rc_uint_type , const bfd_byte *, int, int, int);
-static void write_rc_rcdata (FILE *, const rc_rcdata_item *, int);
-static void write_rc_stringtable (FILE *, const rc_res_id *, const rc_stringtable *);
-static void write_rc_versioninfo (FILE *, const rc_versioninfo *);
+static void indent PARAMS ((FILE *, int));
+static void write_rc_directory
+  PARAMS ((FILE *, const struct res_directory *, const struct res_id *,
+	   const struct res_id *, int *, int));
+static void write_rc_subdir
+  PARAMS ((FILE *, const struct res_entry *, const struct res_id *,
+	   const struct res_id *, int *, int));
+static void write_rc_resource
+  PARAMS ((FILE *, const struct res_id *, const struct res_id *,
+	   const struct res_resource *, int *));
+static void write_rc_accelerators
+  PARAMS ((FILE *, const struct accelerator *));
+static void write_rc_cursor PARAMS ((FILE *, const struct cursor *));
+static void write_rc_group_cursor
+  PARAMS ((FILE *, const struct group_cursor *));
+static void write_rc_dialog PARAMS ((FILE *, const struct dialog *));
+static void write_rc_dialog_control
+  PARAMS ((FILE *, const struct dialog_control *));
+static void write_rc_fontdir PARAMS ((FILE *, const struct fontdir *));
+static void write_rc_group_icon PARAMS ((FILE *, const struct group_icon *));
+static void write_rc_menu PARAMS ((FILE *, const struct menu *, int));
+static void write_rc_menuitems
+  PARAMS ((FILE *, const struct menuitem *, int, int));
+static void write_rc_rcdata PARAMS ((FILE *, const struct rcdata_item *, int));
+static void write_rc_stringtable
+  PARAMS ((FILE *, const struct res_id *, const struct stringtable *));
+static void write_rc_versioninfo PARAMS ((FILE *, const struct versioninfo *));
+static void write_rc_filedata
+  PARAMS ((FILE *, unsigned long, const unsigned char *));
 
 /* Indent a given number of spaces.  */
 
 static void
-indent (FILE *e, int c)
+indent (e, c)
+     FILE *e;
+     int c;
 {
   int i;
 
@@ -1921,15 +1145,21 @@ indent (FILE *e, int c)
 
 /* Dump the resources we have read in the format of an rc file.
 
-   Reasoned by the fact, that some resources need to be stored into file and
-   refer to that file, we use the user-data model for that to express it binary
-   without the need to store it somewhere externally.  */
+   Actually, we don't use the format of an rc file, because it's way
+   too much of a pain--for example, we'd have to write icon resources
+   into a file and refer to that file.  We just generate a readable
+   format that kind of looks like an rc file, and is useful for
+   understanding the contents of a resource file.  Someday we may want
+   to generate an rc file which the rc compiler can read; if that day
+   comes, this code will have to be fixed up.  */
 
 void
-write_rc_file (const char *filename, const rc_res_directory *resources)
+write_rc_file (filename, resources)
+     const char *filename;
+     const struct res_directory *resources;
 {
   FILE *e;
-  rc_uint_type language;
+  int language;
 
   if (filename == NULL)
     e = stdout;
@@ -1940,9 +1170,9 @@ write_rc_file (const char *filename, const rc_res_directory *resources)
 	fatal (_("can't open `%s' for output: %s"), filename, strerror (errno));
     }
 
-  language = (rc_uint_type) ((bfd_signed_vma) -1);
-  write_rc_directory (e, resources, (const rc_res_id *) NULL,
-		      (const rc_res_id *) NULL, &language, 1);
+  language = -1;
+  write_rc_directory (e, resources, (const struct res_id *) NULL,
+		      (const struct res_id *) NULL, &language, 1);
 }
 
 /* Write out a directory.  E is the file to write to.  RD is the
@@ -1952,23 +1182,24 @@ write_rc_file (const char *filename, const rc_res_directory *resources)
    language.  LEVEL is the level in the tree.  */
 
 static void
-write_rc_directory (FILE *e, const rc_res_directory *rd,
-		    const rc_res_id *type, const rc_res_id *name,
-		    rc_uint_type *language, int level)
+write_rc_directory (e, rd, type, name, language, level)
+     FILE *e;
+     const struct res_directory *rd;
+     const struct res_id *type;
+     const struct res_id *name;
+     int *language;
+     int level;
 {
-  const rc_res_entry *re;
+  const struct res_entry *re;
 
   /* Print out some COFF information that rc files can't represent.  */
-  if (rd->time != 0 || rd->characteristics != 0 || rd->major != 0 || rd->minor != 0)
-    {
-      wr_printcomment (e, "COFF information not part of RC");
+
   if (rd->time != 0)
-	wr_printcomment (e, "Time stamp: %u", rd->time);
+    fprintf (e, "// Time stamp: %lu\n", rd->time);
   if (rd->characteristics != 0)
-	wr_printcomment (e, "Characteristics: %u", rd->characteristics);
+    fprintf (e, "// Characteristics: %lu\n", rd->characteristics);
   if (rd->major != 0 || rd->minor != 0)
-	wr_printcomment (e, "Version major:%d minor:%d", rd->major, rd->minor);
-    }
+    fprintf (e, "// Version: %d %d\n", rd->major, rd->minor);
 
   for (re = rd->entries;  re != NULL; re = re->next)
     {
@@ -1984,7 +1215,7 @@ write_rc_directory (FILE *e, const rc_res_directory *rd,
 
 	case 2:
 	  /* If we're at level 2, the key of this resource is the name
-	     we are going to use in the rc printout.  */
+	     we are going to use in the rc printout. */
 	  name = &re->id;
 	  break;
 
@@ -1995,9 +1226,8 @@ write_rc_directory (FILE *e, const rc_res_directory *rd,
 	      && re->id.u.id != (unsigned long) (unsigned int) *language
 	      && (re->id.u.id & 0xffff) == re->id.u.id)
 	    {
-	      wr_print (e, "LANGUAGE %u, %u\n",
-		       re->id.u.id & ((1 << SUBLANG_SHIFT) - 1),
-		       (re->id.u.id >> SUBLANG_SHIFT) & 0xff);
+	      fprintf (e, "LANGUAGE %lu, %lu\n",
+		       re->id.u.id & 0xff, (re->id.u.id >> 8) & 0xff);
 	      *language = re->id.u.id;
 	    }
 	  break;
@@ -2021,15 +1251,11 @@ write_rc_directory (FILE *e, const rc_res_directory *rd,
 	    }
 	  else
 	    {
-	      wr_printcomment (e, "Resource at unexpected level %d", level);
-	      write_rc_resource (e, type, (rc_res_id *) NULL, re->u.res,
+	      fprintf (e, "// Resource at unexpected level %d\n", level);
+	      write_rc_resource (e, type, (struct res_id *) NULL, re->u.res,
 				 language);
 	    }
 	}
-    }
-  if (rd->entries == NULL)
-    {
-      wr_print_flush (e);
     }
 }
 
@@ -2039,15 +1265,19 @@ write_rc_directory (FILE *e, const rc_res_directory *rd,
    LEVEL is the level in the tree.  */
 
 static void
-write_rc_subdir (FILE *e, const rc_res_entry *re,
-		 const rc_res_id *type, const rc_res_id *name,
-		 rc_uint_type *language, int level)
+write_rc_subdir (e, re, type, name, language, level)
+     FILE *e;
+     const struct res_entry *re;
+     const struct res_id *type;
+     const struct res_id *name;
+     int *language;
+     int level;
 {
   fprintf (e, "\n");
   switch (level)
     {
     case 1:
-      wr_printcomment (e, "Type: ");
+      fprintf (e, "// Type: ");
       if (re->id.named)
 	res_id_print (e, re->id, 1);
       else
@@ -2075,8 +1305,6 @@ write_rc_subdir (FILE *e, const rc_res_entry *re,
 	    case RT_VXD: s = "vxd"; break;
 	    case RT_ANICURSOR: s = "anicursor"; break;
 	    case RT_ANIICON: s = "aniicon"; break;
-	    case RT_TOOLBAR: s = "toolbar"; break;
-	    case RT_HTML: s = "html"; break;
 	    default: s = NULL; break;
 	    }
 
@@ -2085,22 +1313,26 @@ write_rc_subdir (FILE *e, const rc_res_entry *re,
 	  else
 	    res_id_print (e, re->id, 1);
 	}
+      fprintf (e, "\n");
       break;
 
     case 2:
-      wr_printcomment (e, "Name: ");
+      fprintf (e, "// Name: ");
       res_id_print (e, re->id, 1);
+      fprintf (e, "\n");
       break;
 
     case 3:
-      wr_printcomment (e, "Language: ");
+      fprintf (e, "// Language: ");
       res_id_print (e, re->id, 1);
+      fprintf (e, "\n");
       break;
 
     default:
-      wr_printcomment (e, "Level %d: ", level);
+      fprintf (e, "// Level %d: ", level);
       res_id_print (e, re->id, 1);
-    }
+      fprintf (e, "\n");
+    }		
 
   write_rc_directory (e, re->u.dir, type, name, language, level + 1);
 }
@@ -2112,13 +1344,18 @@ write_rc_subdir (FILE *e, const rc_res_entry *re,
    language.  */
 
 static void
-write_rc_resource (FILE *e, const rc_res_id *type,
-		   const rc_res_id *name, const rc_res_resource *res,
-		   rc_uint_type *language)
+write_rc_resource (e, type, name, res, language)
+     FILE *e;
+     const struct res_id *type;
+     const struct res_id *name;
+     const struct res_resource *res;
+     int *language;
 {
   const char *s;
   int rt;
   int menuex = 0;
+
+  fprintf (e, "\n");
 
   switch (res->type)
     {
@@ -2126,22 +1363,22 @@ write_rc_resource (FILE *e, const rc_res_id *type,
       abort ();
 
     case RES_TYPE_ACCELERATOR:
-      s = "ACCELERATORS";
+      s = "ACCELERATOR";
       rt = RT_ACCELERATOR;
       break;
 
     case RES_TYPE_BITMAP:
-      s = "2 /* RT_BITMAP */";
+      s = "BITMAP";
       rt = RT_BITMAP;
       break;
 
     case RES_TYPE_CURSOR:
-      s = "1 /* RT_CURSOR */";
+      s = "CURSOR";
       rt = RT_CURSOR;
       break;
 
     case RES_TYPE_GROUP_CURSOR:
-      s = "12 /* RT_GROUP_CURSOR */";
+      s = "GROUP_CURSOR";
       rt = RT_GROUP_CURSOR;
       break;
 
@@ -2154,22 +1391,22 @@ write_rc_resource (FILE *e, const rc_res_id *type,
       break;
 
     case RES_TYPE_FONT:
-      s = "8 /* RT_FONT */";
+      s = "FONT";
       rt = RT_FONT;
       break;
 
     case RES_TYPE_FONTDIR:
-      s = "7 /* RT_FONTDIR */";
+      s = "FONTDIR";
       rt = RT_FONTDIR;
       break;
 
     case RES_TYPE_ICON:
-      s = "3 /* RT_ICON */";
+      s = "ICON";
       rt = RT_ICON;
       break;
 
     case RES_TYPE_GROUP_ICON:
-      s = "14 /* RT_GROUP_ICON */";
+      s = "GROUP_ICON";
       rt = RT_GROUP_ICON;
       break;
 
@@ -2188,7 +1425,7 @@ write_rc_resource (FILE *e, const rc_res_id *type,
       break;
 
     case RES_TYPE_MESSAGETABLE:
-      s = "11 /* RT_MESSAGETABLE */";
+      s = "MESSAGETABLE";
       rt = RT_MESSAGETABLE;
       break;
 
@@ -2211,76 +1448,32 @@ write_rc_resource (FILE *e, const rc_res_id *type,
       s = "VERSIONINFO";
       rt = RT_VERSION;
       break;
-
-    case RES_TYPE_TOOLBAR:
-      s = "TOOLBAR";
-      rt = RT_TOOLBAR;
-      break;
     }
 
   if (rt != 0
       && type != NULL
       && (type->named || type->u.id != (unsigned long) rt))
     {
-      wr_printcomment (e, "Unexpected resource type mismatch: ");
+      fprintf (e, "// Unexpected resource type mismatch: ");
       res_id_print (e, *type, 1);
       fprintf (e, " != %d", rt);
     }
 
   if (res->coff_info.codepage != 0)
-    wr_printcomment (e, "Code page: %u", res->coff_info.codepage);
+    fprintf (e, "// Code page: %lu\n", res->coff_info.codepage);
   if (res->coff_info.reserved != 0)
-    wr_printcomment (e, "COFF reserved value: %u", res->coff_info.reserved);
+    fprintf (e, "// COFF reserved value: %lu\n", res->coff_info.reserved);
 
-  wr_print (e, "\n");
-  if (rt == RT_STRING)
-    ;
-  else
-    {
   if (name != NULL)
-	res_id_print (e, *name, 1);
+    res_id_print (e, *name, 0);
   else
     fprintf (e, "??Unknown-Name??");
-  fprintf (e, " ");
-    }
 
+  fprintf (e, " ");
   if (s != NULL)
     fprintf (e, "%s", s);
   else if (type != NULL)
-    {
-      if (type->named == 0)
-	{
-#define PRINT_RT_NAME(NAME) case NAME: \
-	fprintf (e, "%u /* %s */", (unsigned int) NAME, #NAME); \
-	break
-
-	  switch (type->u.id)
-	    {
-	    default:
     res_id_print (e, *type, 0);
-	      break;
-	
-	    PRINT_RT_NAME(RT_MANIFEST);
-	    PRINT_RT_NAME(RT_ANICURSOR);
-	    PRINT_RT_NAME(RT_ANIICON);
-	    PRINT_RT_NAME(RT_RCDATA);
-	    PRINT_RT_NAME(RT_ICON);
-	    PRINT_RT_NAME(RT_CURSOR);
-	    PRINT_RT_NAME(RT_BITMAP);
-	    PRINT_RT_NAME(RT_PLUGPLAY);
-	    PRINT_RT_NAME(RT_VXD);
-	    PRINT_RT_NAME(RT_FONT);
-	    PRINT_RT_NAME(RT_FONTDIR);
-	    PRINT_RT_NAME(RT_HTML);
-	    PRINT_RT_NAME(RT_MESSAGETABLE);
-	    PRINT_RT_NAME(RT_DLGINCLUDE);
-	    PRINT_RT_NAME(RT_DLGINIT);
-	    }
-#undef PRINT_RT_NAME
-	}
-      else
-	res_id_print (e, *type, 1);
-    }
   else
     fprintf (e, "??Unknown-Type??");
 
@@ -2298,17 +1491,11 @@ write_rc_resource (FILE *e, const rc_res_id *type,
 
   if (res->type == RES_TYPE_DIALOG)
     {
-      fprintf (e, " %d, %d, %d, %d",
-	       (int) res->u.dialog->x, (int) res->u.dialog->y,
-	       (int) res->u.dialog->width, (int) res->u.dialog->height);
+      fprintf (e, " %d, %d, %d, %d", res->u.dialog->x, res->u.dialog->y,
+	       res->u.dialog->width, res->u.dialog->height);
       if (res->u.dialog->ex != NULL
 	  && res->u.dialog->ex->help != 0)
-	fprintf (e, ", %u", (unsigned int) res->u.dialog->ex->help);
-    }
-  else if (res->type == RES_TYPE_TOOLBAR)
-  {
-    fprintf (e, " %d, %d", (int) res->u.toolbar->button_width,
-	     (int) res->u.toolbar->button_height);
+	fprintf (e, ", %lu", res->u.dialog->ex->help);
     }
 
   fprintf (e, "\n");
@@ -2337,16 +1524,16 @@ write_rc_resource (FILE *e, const rc_res_id *type,
       if (res->res_info.language != 0 && res->res_info.language != *language)
 	fprintf (e, "%sLANGUAGE %d, %d\n",
 		 modifiers ? "// " : "",
-		 (int) res->res_info.language & ((1<<SUBLANG_SHIFT)-1),
-		 (int) (res->res_info.language >> SUBLANG_SHIFT) & 0xff);
+		 res->res_info.language & 0xff,
+		 (res->res_info.language >> 8) & 0xff);
       if (res->res_info.characteristics != 0)
-	fprintf (e, "%sCHARACTERISTICS %u\n",
+	fprintf (e, "%sCHARACTERISTICS %lu\n",
 		 modifiers ? "// " : "",
-		 (unsigned int) res->res_info.characteristics);
+		 res->res_info.characteristics);
       if (res->res_info.version != 0)
-	fprintf (e, "%sVERSION %u\n",
+	fprintf (e, "%sVERSION %lu\n",
 		 modifiers ? "// " : "",
-		 (unsigned int) res->res_info.version);
+		 res->res_info.version);
     }
 
   switch (res->type)
@@ -2394,10 +1581,6 @@ write_rc_resource (FILE *e, const rc_res_id *type,
       write_rc_rcdata (e, res->u.userdata, 0);
       break;
 
-    case RES_TYPE_TOOLBAR:
-      write_rc_toolbar (e, res->u.toolbar);
-      break;
-
     case RES_TYPE_VERSIONINFO:
       write_rc_versioninfo (e, res->u.versioninfo);
       break;
@@ -2405,10 +1588,8 @@ write_rc_resource (FILE *e, const rc_res_id *type,
     case RES_TYPE_BITMAP:
     case RES_TYPE_FONT:
     case RES_TYPE_ICON:
-      write_rc_datablock (e, res->u.data.length, res->u.data.data, 0, 1, 0);
-      break;
     case RES_TYPE_MESSAGETABLE:
-      write_rc_messagetable (e, res->u.data.length, res->u.data.data);
+      write_rc_filedata (e, res->u.data.length, res->u.data.data);
       break;
     }
 }
@@ -2416,9 +1597,11 @@ write_rc_resource (FILE *e, const rc_res_id *type,
 /* Write out accelerator information.  */
 
 static void
-write_rc_accelerators (FILE *e, const rc_accelerator *accelerators)
+write_rc_accelerators (e, accelerators)
+     FILE *e;
+     const struct accelerator *accelerators;
 {
-  const rc_accelerator *acc;
+  const struct accelerator *acc;
 
   fprintf (e, "BEGIN\n");
   for (acc = accelerators; acc != NULL; acc = acc->next)
@@ -2428,19 +1611,19 @@ write_rc_accelerators (FILE *e, const rc_accelerator *accelerators)
       fprintf (e, "  ");
 
       if ((acc->key & 0x7f) == acc->key
-	  && ISPRINT (acc->key)
+	  && isprint ((unsigned char) acc->key)
 	  && (acc->flags & ACC_VIRTKEY) == 0)
 	{
-	  fprintf (e, "\"%c\"", (char) acc->key);
+	  fprintf (e, "\"%c\"", acc->key);
 	  printable = 1;
 	}
       else
 	{
-	  fprintf (e, "%d", (int) acc->key);
+	  fprintf (e, "%d", acc->key);
 	  printable = 0;
 	}
 
-      fprintf (e, ", %d", (int) acc->id);
+      fprintf (e, ", %d", acc->id);
 
       if (! printable)
 	{
@@ -2467,76 +1650,60 @@ write_rc_accelerators (FILE *e, const rc_accelerator *accelerators)
    file, which the rc file would include.  */
 
 static void
-write_rc_cursor (FILE *e, const rc_cursor *cursor)
+write_rc_cursor (e, cursor)
+     FILE *e;
+     const struct cursor *cursor;
 {
-  fprintf (e, "BEGIN\n");
-  indent (e, 2);
-  fprintf (e, " 0x%x, 0x%x,\t/* Hotspot x: %d, y: %d.  */\n",
-	   (unsigned int) cursor->xhotspot, (unsigned int) cursor->yhotspot,
-	   (int) cursor->xhotspot, (int) cursor->yhotspot);
-  write_rc_datablock (e, (rc_uint_type) cursor->length, (const bfd_byte *) cursor->data,
-  		      0, 0, 0);
-  fprintf (e, "END\n");
+  fprintf (e, "// Hotspot: x: %d; y: %d\n", cursor->xhotspot,
+	   cursor->yhotspot);
+  write_rc_filedata (e, cursor->length, cursor->data);
 }
 
 /* Write out group cursor data.  This would normally be built from the
    cursor data.  */
 
 static void
-write_rc_group_cursor (FILE *e, const rc_group_cursor *group_cursor)
+write_rc_group_cursor (e, group_cursor)
+     FILE *e;
+     const struct group_cursor *group_cursor;
 {
-  const rc_group_cursor *gc;
-  int c;
+  const struct group_cursor *gc;
 
-  for (c = 0, gc = group_cursor; gc != NULL; gc = gc->next, c++)
-    ;
-  fprintf (e, "BEGIN\n");
-
-  indent (e, 2);
-  fprintf (e, "0, 2, %d%s\t /* Having %d items.  */\n", c, (c != 0 ? "," : ""), c);
-  indent (e, 4);
-  fprintf (e, "/* width, height, planes, bits, bytes, index.  */\n");
-
-  for (c = 1, gc = group_cursor; gc != NULL; gc = gc->next, c++)
+  for (gc = group_cursor; gc != NULL; gc = gc->next)
     {
-      indent (e, 4);
-      fprintf (e, "%d, %d, %d, %d, 0x%xL, %d%s /* Element %d. */\n",
-	(int) gc->width, (int) gc->height, (int) gc->planes, (int) gc->bits,
-	(unsigned int) gc->bytes, (int) gc->index, (gc->next != NULL ? "," : ""), c);
-      fprintf (e, "/* width: %d; height %d; planes %d; bits %d.  */\n",
-	     (int) gc->width, (int) gc->height, (int) gc->planes,
-	     (int) gc->bits);
+      fprintf (e, "// width: %d; height %d; planes %d; bits %d\n",
+	     gc->width, gc->height, gc->planes, gc->bits);
+      fprintf (e, "// data bytes: %lu; index: %d\n",
+	       gc->bytes, gc->index);
     }
-  fprintf (e, "END\n");
 }
 
 /* Write dialog data.  */
 
 static void
-write_rc_dialog (FILE *e, const rc_dialog *dialog)
+write_rc_dialog (e, dialog)
+     FILE *e;
+     const struct dialog *dialog;
 {
-  const rc_dialog_control *control;
+  const struct dialog_control *control;
 
-  fprintf (e, "STYLE 0x%x\n", dialog->style);
-
+  if (dialog->style != 0)
+    fprintf (e, "STYLE 0x%lx\n", dialog->style);
   if (dialog->exstyle != 0)
-    fprintf (e, "EXSTYLE 0x%x\n", (unsigned int) dialog->exstyle);
-
+    fprintf (e, "EXSTYLE 0x%lx\n", dialog->exstyle);
   if ((dialog->class.named && dialog->class.u.n.length > 0)
       || dialog->class.u.id != 0)
     {
       fprintf (e, "CLASS ");
-      res_id_print (e, dialog->class, 1);
+      res_id_print (e, dialog->class, 0);
       fprintf (e, "\n");
     }
-
   if (dialog->caption != NULL)
     {
-      fprintf (e, "CAPTION ");
-      unicode_print_quoted (e, dialog->caption, -1);
-      fprintf (e, "\n");
+      fprintf (e, "CAPTION \"");
+      unicode_print (e, dialog->caption, -1);
+      fprintf (e, "\"\n");
     }
-
   if ((dialog->menu.named && dialog->menu.u.n.length > 0)
       || dialog->menu.u.id != 0)
     {
@@ -2544,19 +1711,14 @@ write_rc_dialog (FILE *e, const rc_dialog *dialog)
       res_id_print (e, dialog->menu, 0);
       fprintf (e, "\n");
     }
-
   if (dialog->font != NULL)
     {
-      fprintf (e, "FONT %d, ", (int) dialog->pointsize);
-      unicode_print_quoted (e, dialog->font, -1);
+      fprintf (e, "FONT %d, \"", dialog->pointsize);
+      unicode_print (e, dialog->font, -1);
+      fprintf (e, "\"");
       if (dialog->ex != NULL
-	  && (dialog->ex->weight != 0
-	      || dialog->ex->italic != 0
-	      || dialog->ex->charset != 1))
-	fprintf (e, ", %d, %d, %d",
-		 (int) dialog->ex->weight,
-		 (int) dialog->ex->italic,
-		 (int) dialog->ex->charset);
+	  && (dialog->ex->weight != 0 || dialog->ex->italic != 0))
+	fprintf (e, ", %d, %d", dialog->ex->weight, dialog->ex->italic);
       fprintf (e, "\n");
     }
 
@@ -2607,7 +1769,9 @@ static const struct control_info control_info[] =
 /* Write a dialog control.  */
 
 static void
-write_rc_dialog_control (FILE *e, const rc_dialog_control *control)
+write_rc_dialog_control (e, control)
+     FILE *e;
+     const struct dialog_control *control;
 {
   const struct control_info *ci;
 
@@ -2628,11 +1792,8 @@ write_rc_dialog_control (FILE *e, const rc_dialog_control *control)
   else if (ci->name != NULL)
     fprintf (e, "%s", ci->name);
   else
-    {
     fprintf (e, "CONTROL");
-      ci = NULL;
-    }
-
+  
   if (control->text.named || control->text.u.id != 0)
     {
       fprintf (e, " ");
@@ -2640,7 +1801,7 @@ write_rc_dialog_control (FILE *e, const rc_dialog_control *control)
       fprintf (e, ",");
     }
 
-  fprintf (e, " %d, ", (int) control->id);
+  fprintf (e, " %d, ", control->id);
 
   if (ci == NULL)
     {
@@ -2649,10 +1810,10 @@ write_rc_dialog_control (FILE *e, const rc_dialog_control *control)
       res_id_print (e, control->class, 0);
       if (control->class.named)
 	fprintf (e, "\"");
-      fprintf (e, ", 0x%x, ", (unsigned int) control->style);
+      fprintf (e, ", 0x%lx, ", control->style);
     }
 
-  fprintf (e, "%d, %d", (int) control->x, (int) control->y);
+  fprintf (e, "%d, %d", control->x, control->y);
 
   if (control->style != SS_ICON
       || control->exstyle != 0
@@ -2660,17 +1821,15 @@ write_rc_dialog_control (FILE *e, const rc_dialog_control *control)
       || control->height != 0
       || control->help != 0)
     {
-      fprintf (e, ", %d, %d", (int) control->width, (int) control->height);
+      fprintf (e, ", %d, %d", control->width, control->height);
 
       /* FIXME: We don't need to print the style if it is the default.
 	 More importantly, in certain cases we actually need to turn
 	 off parts of the forced style, by using NOT.  */
-      if (ci != NULL)
-	fprintf (e, ", 0x%x", (unsigned int) control->style);
+      fprintf (e, ", 0x%lx", control->style);
 
       if (control->exstyle != 0 || control->help != 0)
-	fprintf (e, ", 0x%x, %u", (unsigned int) control->exstyle,
-		 (unsigned int) control->help);
+	fprintf (e, ", 0x%lx, %lu", control->exstyle, control->help);
     }
 
   fprintf (e, "\n");
@@ -2683,93 +1842,61 @@ write_rc_dialog_control (FILE *e, const rc_dialog_control *control)
    the font data.  */
 
 static void
-write_rc_fontdir (FILE *e, const rc_fontdir *fontdir)
+write_rc_fontdir (e, fontdir)
+     FILE *e;
+     const struct fontdir *fontdir;
 {
-  const rc_fontdir *fc;
-  int c;
+  const struct fontdir *fc;
 
-  for (c = 0, fc = fontdir; fc != NULL; fc = fc->next, c++)
-    ;
-  fprintf (e, "BEGIN\n");
-  indent (e, 2);
-  fprintf (e, "%d%s\t /* Has %d elements.  */\n", c, (c != 0 ? "," : ""), c);
-  for (c = 1, fc = fontdir; fc != NULL; fc = fc->next, c++)
+  for (fc = fontdir; fc != NULL; fc = fc->next)
     {
-      indent (e, 4);
-      fprintf (e, "%d,\t/* Font no %d with index %d.  */\n",
-	(int) fc->index, c, (int) fc->index);
-      write_rc_datablock (e, (rc_uint_type) fc->length - 2,
-			  (const bfd_byte *) fc->data + 4,fc->next != NULL,
-			  0, 0);
+      fprintf (e, "// Font index: %d\n", fc->index);
+      write_rc_filedata (e, fc->length, fc->data);
     }
-  fprintf (e, "END\n");
 }
 
 /* Write out group icon data.  This would normally be built from the
    icon data.  */
 
 static void
-write_rc_group_icon (FILE *e, const rc_group_icon *group_icon)
+write_rc_group_icon (e, group_icon)
+     FILE *e;
+     const struct group_icon *group_icon;
 {
-  const rc_group_icon *gi;
-  int c;
+  const struct group_icon *gi;
 
-  for (c = 0, gi = group_icon; gi != NULL; gi = gi->next, c++)
-    ;
-
-  fprintf (e, "BEGIN\n");
-  indent (e, 2);
-  fprintf (e, " 0, 1, %d%s\t /* Has %d elements.  */\n", c, (c != 0 ? "," : ""), c);
-
-  indent (e, 4);
-  fprintf (e, "/* \"width height colors pad\", planes, bits, bytes, index.  */\n");
-  for (c = 1, gi = group_icon; gi != NULL; gi = gi->next, c++)
+  for (gi = group_icon; gi != NULL; gi = gi->next)
     {
-      indent (e, 4);
-      fprintf (e, "\"\\%03o\\%03o\\%03o\\%03o\", %d, %d, 0x%xL, %d%s\t/* Element no %d.  */\n",
-	gi->width, gi->height, gi->colors, 0, (int) gi->planes, (int) gi->bits,
-	(unsigned int) gi->bytes, (int) gi->index, (gi->next != NULL ? "," : ""), c);
+      fprintf (e, "// width: %d; height %d; colors: %d; planes %d; bits %d\n",
+	       gi->width, gi->height, gi->colors, gi->planes, gi->bits);
+      fprintf (e, "// data bytes: %lu; index: %d\n",
+	       gi->bytes, gi->index);
     }
-  fprintf (e, "END\n");
 }
 
 /* Write out a menu resource.  */
 
 static void
-write_rc_menu (FILE *e, const rc_menu *menu, int menuex)
+write_rc_menu (e, menu, menuex)
+     FILE *e;
+     const struct menu *menu;
+     int menuex;
 {
   if (menu->help != 0)
-    fprintf (e, "// Help ID: %u\n", (unsigned int) menu->help);
+    fprintf (e, "// Help ID: %lu\n", menu->help);
   write_rc_menuitems (e, menu->items, menuex, 0);
-}
-
-static void
-write_rc_toolbar (FILE *e, const rc_toolbar *tb)
-{
-  rc_toolbar_item *it;
-  indent (e, 0);
-  fprintf (e, "BEGIN\n");
-  it = tb->items;
-  while(it != NULL)
-  {
-    indent (e, 2);
-    if (it->id.u.id == 0)
-      fprintf (e, "SEPARATOR\n");
-    else 
-      fprintf (e, "BUTTON %d\n", (int) it->id.u.id);
-    it = it->next;
-  }
-  indent (e, 0);
-  fprintf (e, "END\n");
 }
 
 /* Write out menuitems.  */
 
 static void
-write_rc_menuitems (FILE *e, const rc_menuitem *menuitems, int menuex,
-		    int ind)
+write_rc_menuitems (e, menuitems, menuex, ind)
+     FILE *e;
+     const struct menuitem *menuitems;
+     int menuex;
+     int ind;
 {
-  const rc_menuitem *mi;
+  const struct menuitem *mi;
 
   indent (e, ind);
   fprintf (e, "BEGIN\n");
@@ -2797,14 +1924,15 @@ write_rc_menuitems (FILE *e, const rc_menuitem *menuitems, int menuex,
 	fprintf (e, " \"\"");
       else
 	{
-	  fprintf (e, " ");
-	  unicode_print_quoted (e, mi->text, -1);
+	  fprintf (e, " \"");
+	  unicode_print (e, mi->text, -1);
+	  fprintf (e, "\"");
 	}
 
       if (! menuex)
 	{
 	  if (mi->popup == NULL)
-	    fprintf (e, ", %d", (int) mi->id);
+	    fprintf (e, ", %d", mi->id);
 
 	  if ((mi->type & MENUITEM_CHECKED) != 0)
 	    fprintf (e, ", CHECKED");
@@ -2823,15 +1951,15 @@ write_rc_menuitems (FILE *e, const rc_menuitem *menuitems, int menuex,
 	{
 	  if (mi->id != 0 || mi->type != 0 || mi->state != 0 || mi->help != 0)
 	    {
-	      fprintf (e, ", %d", (int) mi->id);
+	      fprintf (e, ", %d", mi->id);
 	      if (mi->type != 0 || mi->state != 0 || mi->help != 0)
 		{
-		  fprintf (e, ", %u", (unsigned int) mi->type);
+		  fprintf (e, ", %lu", mi->type);
 		  if (mi->state != 0 || mi->help != 0)
 		    {
-		      fprintf (e, ", %u", (unsigned int) mi->state);
+		      fprintf (e, ", %lu", mi->state);
 		      if (mi->help != 0)
-			fprintf (e, ", %u", (unsigned int) mi->help);
+			fprintf (e, ", %lu", mi->help);
 		    }
 		}
 	    }
@@ -2847,289 +1975,16 @@ write_rc_menuitems (FILE *e, const rc_menuitem *menuitems, int menuex,
   fprintf (e, "END\n");
 }
 
-static int
-test_rc_datablock_unicode (rc_uint_type length, const bfd_byte *data)
-{
-  rc_uint_type i;
-  if ((length & 1) != 0)
-    return 0;
-
-  for (i = 0; i < length; i += 2)
-    {
-      if (data[i] == 0 && data[i + 1] == 0 && (i + 2) < length)
-	return 0;
-      if (data[i] == 0xff && data[i + 1] == 0xff)
-	return 0;
-    }
-  return 1;
-}
-
-static int
-test_rc_datablock_text (rc_uint_type length, const bfd_byte *data)
-{
-  int has_nl;
-  rc_uint_type c;
-  rc_uint_type i;
-  
-  if (length <= 1)
-    return 0;
-
-  has_nl = 0;
-  for (i = 0, c = 0; i < length; i++)
-    {
-      if (! ISPRINT (data[i]) && data[i] != '\n'
-      	  && ! (data[i] == '\r' && (i + 1) < length && data[i + 1] == '\n')
-      	  && data[i] != '\t'
-	  && ! (data[i] == 0 && (i + 1) != length))
-	{
-	  if (data[i] <= 7)
-	    return 0;
-	  c++;
-	}
-      else if (data[i] == '\n') has_nl++;
-    }
-  if (length > 80 && ! has_nl)
-    return 0;
-  c = (((c * 10000) + (i / 100) - 1)) / i;
-  if (c >= 150)
-    return 0;
-  return 1;
-}
-
-static void
-write_rc_messagetable (FILE *e, rc_uint_type length, const bfd_byte *data)
-{
-  int has_error = 0;
-  const struct bin_messagetable *mt;
-  fprintf (e, "BEGIN\n");
-
-  write_rc_datablock (e, length, data, 0, 0, 0);
-
-  fprintf (e, "\n");
-  wr_printcomment (e, "MC syntax dump");
-  if (length < BIN_MESSAGETABLE_SIZE)
-    has_error = 1;
-  else
-    do {
-      rc_uint_type m, i;
-      mt = (const struct bin_messagetable *) data;
-      m = windres_get_32 (&wrtarget, mt->cblocks, length);
-      if (length < (BIN_MESSAGETABLE_SIZE + m * BIN_MESSAGETABLE_BLOCK_SIZE))
-	{
-	  has_error = 1;
-	  break;
-	}
-      for (i = 0; i < m; i++)
-	{
-	  rc_uint_type low, high, offset;
-	  const struct bin_messagetable_item *mti;
-
-	  low = windres_get_32 (&wrtarget, mt->items[i].lowid, 4);
-	  high = windres_get_32 (&wrtarget, mt->items[i].highid, 4);
-	  offset = windres_get_32 (&wrtarget, mt->items[i].offset, 4);
-	  while (low <= high)
-	    {
-	      rc_uint_type elen, flags;
-	      if ((offset + BIN_MESSAGETABLE_ITEM_SIZE) > length)
-		{
-		  has_error = 1;
-	  break;
-		}
-	      mti = (const struct bin_messagetable_item *) &data[offset];
-	      elen = windres_get_16 (&wrtarget, mti->length, 2);
-	      flags = windres_get_16 (&wrtarget, mti->flags, 2);
-	      if ((offset + elen) > length)
-		{
-		  has_error = 1;
-		  break;
-		}
-	      wr_printcomment (e, "MessageId = 0x%x", low);
-	      wr_printcomment (e, "");
-	      if ((flags & MESSAGE_RESOURCE_UNICODE) == MESSAGE_RESOURCE_UNICODE)
-		unicode_print (e, (const unichar *) mti->data,
-			       (elen - BIN_MESSAGETABLE_ITEM_SIZE) / 2);
-	      else
-		ascii_print (e, (const char *) mti->data,
-			     (elen - BIN_MESSAGETABLE_ITEM_SIZE));
-	      wr_printcomment (e,"");
-	      ++low;
-	      offset += elen;
-	    }
-	}
-    } while (0);
-  if (has_error)
-    wr_printcomment (e, "Illegal data");
-  wr_print_flush (e);
-  fprintf (e, "END\n");
-}
-
-static void
-write_rc_datablock (FILE *e, rc_uint_type length, const bfd_byte *data, int has_next,
-		    int hasblock, int show_comment)
-{
-  int plen;
-
-  if (hasblock)
-    fprintf (e, "BEGIN\n");
-
-  if (show_comment == -1)
-	  {
-      if (test_rc_datablock_text(length, data))
-	{
-	  rc_uint_type i, c;
-	  for (i = 0; i < length;)
-	    {
-	      indent (e, 2);
-	      fprintf (e, "\"");
-
-	      for (c = 0; i < length && c < 160 && data[i] != '\n'; c++, i++)
-		;
-	      if (i < length && data[i] == '\n')
-		++i, ++c;
-	      ascii_print (e, (const char *) &data[i - c], c);
-	    fprintf (e, "\"");
-	      if (i < length)
-		fprintf (e, "\n");
-	    }
-          
-	  if (i == 0)
-	      {
-	      indent (e, 2);
-	      fprintf (e, "\"\"");
-	      }
-	  if (has_next)
-	    fprintf (e, ",");
-	  fprintf (e, "\n");
-	  if (hasblock)
-	    fprintf (e, "END\n");
-	  return;
-	  }
-      if (test_rc_datablock_unicode (length, data))
-	{
-	  rc_uint_type i, c;
-	  for (i = 0; i < length;)
-	    {
-	      const unichar *u;
-
-	      u = (const unichar *) &data[i];
-	      indent (e, 2);
-	  fprintf (e, "L\"");
-    	  
-	      for (c = 0; i < length && c < 160 && u[c] != '\n'; c++, i += 2)
-		;
-	      if (i < length && u[c] == '\n')
-		i += 2, ++c;
-	      unicode_print (e, u, c);
-	  fprintf (e, "\"");
-	      if (i < length)
-		fprintf (e, "\n");
-	    }
-
-	  if (i == 0)
-	  {
-	      indent (e, 2);
-	      fprintf (e, "L\"\"");
-	    }
-	  if (has_next)
-	    fprintf (e, ",");
-	  fprintf (e, "\n");
-	  if (hasblock)
-	    fprintf (e, "END\n");
-	  return;
-	}
-
-      show_comment = 0;
-    }
-
-  if (length != 0)
-	      {
-      rc_uint_type i, max_row;
-      int first = 1;
-
-      max_row = (show_comment ? 4 : 8);
-      indent (e, 2);
-      for (i = 0; i + 3 < length;)
-		  {
-	  rc_uint_type k;
-	  rc_uint_type comment_start;
-	  
-	  comment_start = i;
-	  
-	  if (! first)
-	    indent (e, 2);
-
-	  for (k = 0; k < max_row && i + 3 < length; k++, i += 4)
-		      {
-	      if (k == 0)
-		plen  = fprintf (e, "0x%lxL",
-				 (unsigned long) windres_get_32 (&wrtarget, data + i, length - i));
-			else
-		plen = fprintf (e, " 0x%lxL",
-				(unsigned long) windres_get_32 (&wrtarget, data + i, length - i)) - 1;
-	      if (has_next || (i + 4) < length)
-			  {
-		  if (plen>0 && plen < 11)
-		    indent (e, 11 - plen);
-		  fprintf (e, ",");
-			  }
-		      }
-	  if (show_comment)
-	    {
-	      fprintf (e, "\t/* ");
-	      ascii_print (e, (const char *) &data[comment_start], i - comment_start);
-	      fprintf (e, ".  */");
-		  }
-		fprintf (e, "\n");
-		first = 0;
-	      }
-
-      if (i + 1 < length)
-	      {
-		if (! first)
-	    indent (e, 2);
-	  plen = fprintf (e, "0x%x",
-	  		  (int) windres_get_16 (&wrtarget, data + i, length - i));
-	  if (has_next || i + 2 < length)
-		  {
-	      if (plen > 0 && plen < 11)
-		indent (e, 11 - plen);
-	      fprintf (e, ",");
-		      }
-	  if (show_comment)
-	    {
-	      fprintf (e, "\t/* ");
-	      ascii_print (e, (const char *) &data[i], 2);
-	      fprintf (e, ".  */");
-		  }
-		fprintf (e, "\n");
-		i += 2;
-		first = 0;
-	      }
-
-      if (i < length)
-	      {
-		if (! first)
-	    indent (e, 2);
-	  fprintf (e, "\"");
-	  ascii_print (e, (const char *) &data[i], 1);
-	  fprintf (e, "\"");
-	  if (has_next)
-		  fprintf (e, ",");
-		fprintf (e, "\n");
-		first = 0;
-	      }
-    }
-  if (hasblock)
-    fprintf (e, "END\n");
-}
-
 /* Write out an rcdata resource.  This is also used for other types of
    resources that need to print arbitrary data.  */
 
 static void
-write_rc_rcdata (FILE *e, const rc_rcdata_item *rcdata, int ind)
+write_rc_rcdata (e, rcdata, ind)
+     FILE *e;
+     const struct rcdata_item *rcdata;
+     int ind;
 {
-  const rc_rcdata_item *ri;
+  const struct rcdata_item *ri;
 
   indent (e, ind);
   fprintf (e, "BEGIN\n");
@@ -3139,48 +1994,110 @@ write_rc_rcdata (FILE *e, const rc_rcdata_item *rcdata, int ind)
       if (ri->type == RCDATA_BUFFER && ri->u.buffer.length == 0)
 	continue;
 
+      indent (e, ind + 2);
+
       switch (ri->type)
 	{
 	default:
 	  abort ();
 
 	case RCDATA_WORD:
-	  indent (e, ind + 2);
-	  fprintf (e, "%ld", (long) (ri->u.word & 0xffff));
+	  fprintf (e, "%d", ri->u.word);
 	  break;
 
 	case RCDATA_DWORD:
-	  indent (e, ind + 2);
-	  fprintf (e, "%luL", (unsigned long) ri->u.dword);
+	  fprintf (e, "%luL", ri->u.dword);
 	  break;
 
 	case RCDATA_STRING:
-	  indent (e, ind + 2);
-	  fprintf (e, "\"");
-	  ascii_print (e, ri->u.string.s, ri->u.string.length);
-	  fprintf (e, "\"");
-	  break;
+	  {
+	    const char *s;
+	    unsigned long i;
+
+	    fprintf (e, "\"");
+	    s = ri->u.string.s;
+	    for (i = 0; i < ri->u.string.length; i++)
+	      {
+		if (isprint ((unsigned char) *s))
+		  putc (*s, e);
+		else
+		  fprintf (e, "\\%03o", *s);
+	      }
+	    fprintf (e, "\"");
+	    break;
+	  }
 
 	case RCDATA_WSTRING:
-	  indent (e, ind + 2);
 	  fprintf (e, "L\"");
 	  unicode_print (e, ri->u.wstring.w, ri->u.wstring.length);
 	  fprintf (e, "\"");
 	  break;
 
 	case RCDATA_BUFFER:
-	  write_rc_datablock (e, (rc_uint_type) ri->u.buffer.length,
-	  		      (const bfd_byte *) ri->u.buffer.data,
-	    		      ri->next != NULL, 0, -1);
+	  {
+	    unsigned long i;
+	    int first;
+
+	    /* Assume little endian data.  */
+
+	    first = 1;
+	    for (i = 0; i + 3 < ri->u.buffer.length; i += 4)
+	      {
+		unsigned long l;
+
+		l = ((((((ri->u.buffer.data[i + 3] << 8)
+			 | ri->u.buffer.data[i + 2]) << 8)
+		       | ri->u.buffer.data[i + 1]) << 8)
+		     | ri->u.buffer.data[i]);
+		if (first)
+		  first = 0;
+		else
+		  {
+		    fprintf (e, ",\n");
+		    indent (e, ind + 2);
+		  }
+		fprintf (e, "%luL", l);
+	      }
+
+	    if (i + 1 < ri->u.buffer.length)
+	      {
+		int i;
+
+		i = (ri->u.buffer.data[i + 1] << 8) | ri->u.buffer.data[i];
+		if (first)
+		  first = 0;
+		else
+		  {
+		    fprintf (e, ",\n");
+		    indent (e, ind + 2);
+		  }
+		fprintf (e, "%d", i);
+		i += 2;
+	      }
+
+	    if (i < ri->u.buffer.length)
+	      {
+		if (first)
+		  first = 0;
+		else
+		  {
+		    fprintf (e, ",\n");
+		    indent (e, ind + 2);
+		  }
+		if ((ri->u.buffer.data[i] & 0x7f) == ri->u.buffer.data[i]
+		    && isprint (ri->u.buffer.data[i]))
+		  fprintf (e, "\"%c\"", ri->u.buffer.data[i]);
+		else
+		  fprintf (e, "\"\%03o\"", ri->u.buffer.data[i]);
+	      }
+
 	    break;
+	  }
 	}
 
-      if (ri->type != RCDATA_BUFFER)
-	{
-	  if (ri->next != NULL)
-	    fprintf (e, ",");
-	  fprintf (e, "\n");
-	}
+      if (ri->next != NULL)
+	fprintf (e, ",");
+      fprintf (e, "\n");
     }
 
   indent (e, ind);
@@ -3190,17 +2107,19 @@ write_rc_rcdata (FILE *e, const rc_rcdata_item *rcdata, int ind)
 /* Write out a stringtable resource.  */
 
 static void
-write_rc_stringtable (FILE *e, const rc_res_id *name,
-		      const rc_stringtable *stringtable)
+write_rc_stringtable (e, name, stringtable)
+     FILE *e;
+     const struct res_id *name;
+     const struct stringtable *stringtable;
 {
-  rc_uint_type offset;
+  unsigned long offset;
   int i;
 
   if (name != NULL && ! name->named)
     offset = (name->u.id - 1) << 4;
   else
     {
-      fprintf (e, "/* %s string table name.  */\n",
+      fprintf (e, "// %s string table name\n",
 	       name == NULL ? "Missing" : "Invalid");
       offset = 0;
     }
@@ -3211,10 +2130,10 @@ write_rc_stringtable (FILE *e, const rc_res_id *name,
     {
       if (stringtable->strings[i].length != 0)
 	{
-	  fprintf (e, "  %lu, ", (unsigned long) offset + i);
-	  unicode_print_quoted (e, stringtable->strings[i].string,
+	  fprintf (e, "  %lu, \"", offset + i);
+	  unicode_print (e, stringtable->strings[i].string,
 			 stringtable->strings[i].length);
-	  fprintf (e, "\n");
+	  fprintf (e, "\"\n");
 	}
     }
 
@@ -3224,37 +2143,38 @@ write_rc_stringtable (FILE *e, const rc_res_id *name,
 /* Write out a versioninfo resource.  */
 
 static void
-write_rc_versioninfo (FILE *e, const rc_versioninfo *versioninfo)
+write_rc_versioninfo (e, versioninfo)
+     FILE *e;
+     const struct versioninfo *versioninfo;
 {
-  const rc_fixed_versioninfo *f;
-  const rc_ver_info *vi;
+  const struct fixed_versioninfo *f;
+  const struct ver_info *vi;
 
   f = versioninfo->fixed;
   if (f->file_version_ms != 0 || f->file_version_ls != 0)
-    fprintf (e, " FILEVERSION %u, %u, %u, %u\n",
-	     (unsigned int) ((f->file_version_ms >> 16) & 0xffff),
-	     (unsigned int) (f->file_version_ms & 0xffff),
-	     (unsigned int) ((f->file_version_ls >> 16) & 0xffff),
-	     (unsigned int) (f->file_version_ls & 0xffff));
+    fprintf (e, " FILEVERSION %lu, %lu, %lu, %lu\n",
+	     (f->file_version_ms >> 16) & 0xffff,
+	     f->file_version_ms & 0xffff,
+	     (f->file_version_ls >> 16) & 0xffff,
+	     f->file_version_ls & 0xffff);
   if (f->product_version_ms != 0 || f->product_version_ls != 0)
-    fprintf (e, " PRODUCTVERSION %u, %u, %u, %u\n",
-	     (unsigned int) ((f->product_version_ms >> 16) & 0xffff),
-	     (unsigned int) (f->product_version_ms & 0xffff),
-	     (unsigned int) ((f->product_version_ls >> 16) & 0xffff),
-	     (unsigned int) (f->product_version_ls & 0xffff));
+    fprintf (e, " PRODUCTVERSION %lu, %lu, %lu, %lu\n",
+	     (f->product_version_ms >> 16) & 0xffff,
+	     f->product_version_ms & 0xffff,
+	     (f->product_version_ls >> 16) & 0xffff,
+	     f->product_version_ls & 0xffff);
   if (f->file_flags_mask != 0)
-    fprintf (e, " FILEFLAGSMASK 0x%x\n", (unsigned int) f->file_flags_mask);
+    fprintf (e, " FILEFLAGSMASK 0x%lx\n", f->file_flags_mask);
   if (f->file_flags != 0)
-    fprintf (e, " FILEFLAGS 0x%x\n", (unsigned int) f->file_flags);
+    fprintf (e, " FILEFLAGS 0x%lx\n", f->file_flags);
   if (f->file_os != 0)
-    fprintf (e, " FILEOS 0x%x\n", (unsigned int) f->file_os);
+    fprintf (e, " FILEOS 0x%lx\n", f->file_os);
   if (f->file_type != 0)
-    fprintf (e, " FILETYPE 0x%x\n", (unsigned int) f->file_type);
+    fprintf (e, " FILETYPE 0x%lx\n", f->file_type);
   if (f->file_subtype != 0)
-    fprintf (e, " FILESUBTYPE 0x%x\n", (unsigned int) f->file_subtype);
+    fprintf (e, " FILESUBTYPE 0x%lx\n", f->file_subtype);
   if (f->file_date_ms != 0 || f->file_date_ls != 0)
-    fprintf (e, "/* Date: %u, %u.  */\n",
-    	     (unsigned int) f->file_date_ms, (unsigned int) f->file_date_ls);
+    fprintf (e, "// Date: %lu, %lu\n", f->file_date_ms, f->file_date_ls);
 
   fprintf (e, "BEGIN\n");
 
@@ -3264,22 +2184,22 @@ write_rc_versioninfo (FILE *e, const rc_versioninfo *versioninfo)
 	{
 	case VERINFO_STRING:
 	  {
-	    const rc_ver_stringinfo *vs;
+	    const struct ver_stringinfo *vs;
 
 	    fprintf (e, "  BLOCK \"StringFileInfo\"\n");
 	    fprintf (e, "  BEGIN\n");
-	    fprintf (e, "    BLOCK ");
-	    unicode_print_quoted (e, vi->u.string.language, -1);
-	    fprintf (e, "\n");
+	    fprintf (e, "    BLOCK \"");
+	    unicode_print (e, vi->u.string.language, -1);
+	    fprintf (e, "\"\n");
 	    fprintf (e, "    BEGIN\n");
 
 	    for (vs = vi->u.string.strings; vs != NULL; vs = vs->next)
 	      {
-		fprintf (e, "      VALUE ");
-		unicode_print_quoted (e, vs->key, -1);
-		fprintf (e, ", ");
-		unicode_print_quoted (e, vs->value, -1);
-		fprintf (e, "\n");
+		fprintf (e, "      VALUE \"");
+		unicode_print (e, vs->key, -1);
+		fprintf (e, "\", \"");
+		unicode_print (e, vs->value, -1);
+		fprintf (e, "\"\n");
 	      }
 
 	    fprintf (e, "    END\n");
@@ -3289,16 +2209,17 @@ write_rc_versioninfo (FILE *e, const rc_versioninfo *versioninfo)
 
 	case VERINFO_VAR:
 	  {
-	    const rc_ver_varinfo *vv;
+	    const struct ver_varinfo *vv;
 
 	    fprintf (e, "  BLOCK \"VarFileInfo\"\n");
 	    fprintf (e, "  BEGIN\n");
-	    fprintf (e, "    VALUE ");
-	    unicode_print_quoted (e, vi->u.var.key, -1);
+	    fprintf (e, "    VALUE \"");
+	    unicode_print (e, vi->u.var.key, -1);
+	    fprintf (e, "\"");
 
 	    for (vv = vi->u.var.var; vv != NULL; vv = vv->next)
 	      fprintf (e, ", 0x%x, %d", (unsigned int) vv->language,
-		       (int) vv->charset);
+		       vv->charset);
 
 	    fprintf (e, "\n  END\n");
 
@@ -3310,36 +2231,35 @@ write_rc_versioninfo (FILE *e, const rc_versioninfo *versioninfo)
   fprintf (e, "END\n");
 }
 
-static rc_uint_type
-rcdata_copy (const rc_rcdata_item *src, bfd_byte *dst)
+/* Write out data which would normally be read from a file.  */
+
+static void
+write_rc_filedata (e, length, data)
+     FILE *e;
+     unsigned long length;
+     const unsigned char *data;
 {
-  if (! src)
-    return 0;
-  switch (src->type)
-	{
-    case RCDATA_WORD:
-      if (dst)
-	windres_put_16 (&wrtarget, dst, (rc_uint_type) src->u.word);
-      return 2;
-    case RCDATA_DWORD:
-      if (dst)
-	windres_put_32 (&wrtarget, dst, (rc_uint_type) src->u.dword);
-      return 4;
-    case RCDATA_STRING:
-      if (dst && src->u.string.length)
-	memcpy (dst, src->u.string.s, src->u.string.length);
-      return (rc_uint_type) src->u.string.length;
-    case RCDATA_WSTRING:
-      if (dst && src->u.wstring.length)
-	memcpy (dst, src->u.wstring.w, src->u.wstring.length * sizeof (unichar));
-      return (rc_uint_type) (src->u.wstring.length  * sizeof (unichar));
-    case RCDATA_BUFFER:
-      if (dst && src->u.buffer.length)
-	memcpy (dst, src->u.buffer.data, src->u.buffer.length);
-      return (rc_uint_type) src->u.buffer.length;
-    default:
-      abort ();
+  unsigned long i;
+
+  for (i = 0; i + 15 < length; i += 16)
+    {
+      fprintf (e, "// %4lx: ", i);
+      fprintf (e, "%02x %02x %02x %02x %02x %02x %02x %02x ",
+	       data[i + 0], data[i + 1], data[i + 2], data[i + 3],
+	       data[i + 4], data[i + 5], data[i + 6], data[i + 7]);
+      fprintf (e, "%02x %02x %02x %02x %02x %02x %02x %02x\n",
+	       data[i +  8], data[i +  9], data[i + 10], data[i + 11],
+	       data[i + 12], data[i + 13], data[i + 14], data[i + 15]);
     }
-  /* Never reached.  */
-  return 0;
+
+  if (i < length)
+    {
+      fprintf (e, "// %4lx:", i);
+      while (i < length)
+	{
+	  fprintf (e, " %02x", data[i]);
+	  ++i;
+	}
+      fprintf (e, "\n");
+    }
 }

@@ -1,25 +1,23 @@
 /* alphavms.h -- BFD definitions for an openVMS host
-   Copyright 1996, 2000, 2001, 2005, 2007, 2008, 2009
-   Free Software Foundation, Inc.
+   Copyright 1996 Free Software Foundation, Inc.
    Written by Klaus Kämpf (kkaempf@progis.de)
    of proGIS Softwareentwicklung, Aachen, Germany
 
-   This file is part of BFD, the Binary File Descriptor library.
+This file is part of BFD, the Binary File Descriptor library.
 
-   This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
-   (at your option) any later version.
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or
+(at your option) any later version.
 
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
-   MA 02110-1301, USA.  */
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 #include <stddef.h>
 #include <fcntl.h>
@@ -27,6 +25,7 @@
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <ctype.h>
 #include <string.h>
 #include <sys/file.h>
 #include <stdlib.h>
@@ -35,7 +34,6 @@
 #include <time.h>
 
 #include "bfd.h"
-#include "filenames.h"
 
 #ifndef BFD_HOST_64_BIT
 /* Make the basic types 64-bit quantities on the host.
@@ -68,14 +66,4 @@ typedef BFD_HOST_64_BIT int64_type;
 #define O_ACCMODE (O_RDONLY | O_WRONLY | O_RDWR)
 #endif
 
-extern int getpagesize (void);
-extern char *stpcpy (char *, const char *);
-
-/* No intl.  */
-#define gettext(Msgid) (Msgid)
-#define dgettext(Domainname, Msgid) (Msgid)
-#define dcgettext(Domainname, Msgid, Category) (Msgid)
-#define textdomain(Domainname) while (0) /* nothing */
-#define bindtextdomain(Domainname, Dirname) while (0) /* nothing */
-#define _(String) (String)
-#define N_(String) (String)
+extern int getpagesize PARAMS ((void));

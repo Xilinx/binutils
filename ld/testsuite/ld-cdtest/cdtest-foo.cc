@@ -12,7 +12,7 @@ typedef unsigned int size_t;
 #endif
 
 extern "C" {
-    char *strncpy (char* dest, const char* src, size_t len);
+    char *strncpy (char* dest, const char* dest, size_t len);
     int printf (const char*, ...);
 };
 
@@ -22,7 +22,7 @@ int Foo::foos = 0;
 
 void Foo::init_foo ()
 {
-    printf ("BROKENLY calling Foo::init_foo from __init_start; size_of(Foo) = %ld\n", (long) sizeof(Foo));
+    printf ("BROKENLY calling Foo::init_foo from __init_start; size_of(Foo) = %d\n", sizeof(Foo));
     foos = FOOLISH_NUMBER;
 }
 
@@ -38,7 +38,7 @@ Foo::Foo ()
 #endif
 }
 
-Foo::Foo (const char* msg)
+Foo::Foo (char* msg)
 {
     i = ++foos;
     strncpy( message, msg, len);

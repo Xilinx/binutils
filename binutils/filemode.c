@@ -1,10 +1,9 @@
 /* filemode.c -- make a string describing file modes
-   Copyright 1985, 1990, 1991, 1994, 1995, 1997, 1999, 2002, 2003, 2005,
-   2007 Free Software Foundation, Inc.
+   Copyright (C) 1985, 90, 91, 94, 95, 1997 Free Software Foundation, Inc.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3, or (at your option)
+   the Free Software Foundation; either version 2, or (at your option)
    any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -14,15 +13,14 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston, MA
-   02110-1301, USA.  */
+   Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA
+   02111-1307, USA.  */
 
-#include "sysdep.h"
 #include "bfd.h"
 #include "bucomm.h"
 
-static char ftypelet (unsigned long);
-static void setst (unsigned long, char *);
+static char ftypelet PARAMS ((unsigned long));
+static void setst PARAMS ((unsigned long, char *));
 
 /* filemodestring - fill in string STR with an ls-style ASCII
    representation of the st_mode field of file stats block STATP.
@@ -58,7 +56,21 @@ static void setst (unsigned long, char *);
    9	'x' if any user may execute, 't' if the file is "sticky"
 	(will be retained in swap space after execution), '-'
 	otherwise.
-	'T' if the file is sticky but not executable.  */
+	'T' if the file is sticky but not executable. */
+
+#if 0
+
+/* This is not used; only mode_string is used.  */
+
+void
+filemodestring (statp, str)
+     struct stat *statp;
+     char *str;
+{
+  mode_string ((unsigned long) statp->st_mode, str);
+}
+
+#endif
 
 /* Get definitions for the file permission bits.  */
 
@@ -102,10 +114,12 @@ static void setst (unsigned long, char *);
 #endif
 
 /* Like filemodestring, but only the relevant part of the `struct stat'
-   is given as an argument.  */
+   is given as an argument. */
 
 void
-mode_string (unsigned long mode, char *str)
+mode_string (mode, str)
+     unsigned long mode;
+     char *str;
 {
   str[0] = ftypelet ((unsigned long) mode);
   str[1] = (mode & S_IRUSR) != 0 ? 'r' : '-';
@@ -125,11 +139,11 @@ mode_string (unsigned long mode, char *str)
    'd' for directories
    'b' for block special files
    'c' for character special files
-   'm' for multiplexer files
+   'm' for multiplexor files
    'l' for symbolic links
    's' for sockets
    'p' for fifos
-   '-' for any other file type.  */
+   '-' for any other file type. */
 
 #ifndef S_ISDIR
 #ifdef S_IFDIR
@@ -180,7 +194,8 @@ mode_string (unsigned long mode, char *str)
 #endif /* ! defined (S_ISLNK) */
 
 static char
-ftypelet (unsigned long bits)
+ftypelet (bits)
+     unsigned long bits;
 {
   if (S_ISDIR (bits))
     return 'd';
@@ -211,16 +226,18 @@ ftypelet (unsigned long bits)
 }
 
 /* Set the 's' and 't' flags in file attributes string CHARS,
-   according to the file mode BITS.  */
+   according to the file mode BITS. */
 
 static void
-setst (unsigned long bits ATTRIBUTE_UNUSED, char *chars ATTRIBUTE_UNUSED)
+setst (bits, chars)
+     unsigned long bits;
+     char *chars;
 {
 #ifdef S_ISUID
   if (bits & S_ISUID)
     {
       if (chars[3] != 'x')
-	/* Set-uid, but not executable by owner.  */
+	/* Set-uid, but not executable by owner. */
 	chars[3] = 'S';
       else
 	chars[3] = 's';
@@ -230,7 +247,7 @@ setst (unsigned long bits ATTRIBUTE_UNUSED, char *chars ATTRIBUTE_UNUSED)
   if (bits & S_ISGID)
     {
       if (chars[6] != 'x')
-	/* Set-gid, but not executable by group.  */
+	/* Set-gid, but not executable by group. */
 	chars[6] = 'S';
       else
 	chars[6] = 's';
@@ -240,7 +257,7 @@ setst (unsigned long bits ATTRIBUTE_UNUSED, char *chars ATTRIBUTE_UNUSED)
   if (bits & S_ISVTX)
     {
       if (chars[9] != 'x')
-	/* Sticky, but not executable by others.  */
+	/* Sticky, but not executable by others. */
 	chars[9] = 'T';
       else
 	chars[9] = 't';

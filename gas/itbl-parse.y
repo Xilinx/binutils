@@ -1,11 +1,11 @@
 /* itbl-parse.y
-   Copyright 1997, 2002, 2003, 2005, 2006, 2007 Free Software Foundation, Inc.
+   Copyright (C) 1997  Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
    GAS is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3, or (at your option)
+   the Free Software Foundation; either version 2, or (at your option)
    any later version.
 
    GAS is distributed in the hope that it will be useful,
@@ -15,8 +15,8 @@
 
    You should have received a copy of the GNU General Public License
    along with GAS; see the file COPYING.  If not, write to the Free
-   Software Foundation, 51 Franklin Street - Fifth Floor, Boston, MA
-   02110-1301, USA.  */
+   Software Foundation, 59 Temple Place - Suite 330, Boston, MA
+   02111-1307, USA.  */
 
 %{
 
@@ -152,7 +152,7 @@ Here is the grammar for the coprocessor table:
 	    char -> any printable character
 	    ltr -> ['a'..'z'|'A'..'Z'] 
 	    dec -> ['0'..'9']*	    	    	    	    	     ; value in decimal
-	    hex -> '0x'['0'..'9' | 'a'..'f' | 'A'..'F']*	; value in hexadecimal 
+	    hex -> '0x'['0'..'9' | 'a'..'f' | 'A'..'F']*	; value in hexidecimal 
 
 
 Examples
@@ -239,15 +239,14 @@ was deleted from the original format such that we now count the fields.
 
 ----
 FIXME! should really change lexical analyzer 
-to recognize 'dreg' etc. in context sensitive way.
+to recognize 'dreg' etc. in context sensative way.
 Currently function names or mnemonics may be incorrectly parsed as keywords
 
 FIXME! hex is ambiguous with any digit
 
 */
 
-#include "as.h"
-#include "itbl-lex.h"
+#include <stdio.h>
 #include "itbl-ops.h"
 
 /* #define DEBUG */
@@ -274,7 +273,10 @@ FIXME! hex is ambiguous with any digit
 
 static int sbit, ebit;
 static struct itbl_entry *insn=0;
-static int yyerror (const char *);
+extern int insntbl_line;
+int yyparse PARAMS ((void));
+int yylex PARAMS ((void));
+static int yyerror PARAMS ((const char *));
 
 %}
 
@@ -319,7 +321,6 @@ entry:
 	    insn=itbl_add_insn ($1, $3, $4, sbit, ebit, $6);
 	  }
 	fieldspecs NL
-	  {}
 	| NL
 	| error NL
 	;

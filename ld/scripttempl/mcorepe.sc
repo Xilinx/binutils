@@ -1,4 +1,4 @@
-# Linker script for MCore PE.
+# Linker script for PE.
 
 if test -z "${RELOCATEABLE_OUTPUT_FORMAT}"; then
   RELOCATEABLE_OUTPUT_FORMAT=${OUTPUT_FORMAT}
@@ -35,19 +35,13 @@ else
   R_RSRC=
 fi
 
-if test "$RELOCATING"; then
-  # Can't use ${RELOCATING+blah "blah" blah} for this,
-  # because bash 2.x will lose the doublequotes.
-  cat <<EOF
-OUTPUT_FORMAT("${OUTPUT_FORMAT}", "${BIG_OUTPUT_FORMAT}",
-	  	           "${LITTLE_OUTPUT_FORMAT}")
-EOF
-fi
-
 cat <<EOF
+${RELOCATING+OUTPUT_FORMAT(${OUTPUT_FORMAT})}
+${RELOCATING-OUTPUT_FORMAT(${RELOCATEABLE_OUTPUT_FORMAT})}
+
 ${LIB_SEARCH_DIRS}
 
-${RELOCATING+ENTRY (_mainCRTStartup)}
+ENTRY(_mainCRTStartup)
 
 SECTIONS
 {
@@ -56,7 +50,6 @@ SECTIONS
     ${RELOCATING+ *(.init)}
     *(.text)
     ${R_TEXT}
-    ${RELOCATING+ *(.text.*)}
     *(.glue_7t)
     *(.glue_7)
     ${CONSTRUCTING+ ___CTOR_LIST__ = .; __CTOR_LIST__ = . ; 

@@ -1,9 +1,6 @@
-#objdump: -s --section=.text
+#objdump: -s
 #as: -EL
 #name: arm little-endian fpconst
-# Not all arm targets are bi-endian, so only run this test on ones
-# we know that are.  FIXME We should probably also key off armeb/armel.
-#target: *-*-pe
 
 .*: +file format .*arm.*
 

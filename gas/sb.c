@@ -1,6 +1,5 @@
 /* sb.c - string buffer manipulation routines
-   Copyright 1994, 1995, 2000, 2003, 2005, 2006, 2007, 2009
-   Free Software Foundation, Inc.
+   Copyright (C) 1994, 1995 Free Software Foundation, Inc.
 
    Written by Steve and Judy Chamberlain of Cygnus Support,
       sac@cygnus.com
@@ -9,7 +8,7 @@
 
    GAS is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3, or (at your option)
+   the Free Software Foundation; either version 2, or (at your option)
    any later version.
 
    GAS is distributed in the hope that it will be useful,
@@ -19,10 +18,17 @@
 
    You should have received a copy of the GNU General Public License
    along with GAS; see the file COPYING.  If not, write to the Free
-   Software Foundation, 51 Franklin Street - Fifth Floor, Boston, MA
-   02110-1301, USA.  */
+   Software Foundation, 59 Temple Place - Suite 330, Boston, MA
+   02111-1307, USA. */
 
-#include "as.h"
+#include "config.h"
+#include <stdio.h>
+#ifdef HAVE_STRING_H
+#include <string.h>
+#else
+#include <strings.h>
+#endif
+#include "libiberty.h"
 #include "sb.h"
 
 /* These routines are about manipulating strings.
@@ -37,34 +43,39 @@
    sb_new (&foo);
    sb_grow... (&foo,...);
    use foo->ptr[*];
-   sb_kill (&foo);  */
+   sb_kill (&foo);
 
-static int dsize = 5;
-static void sb_check (sb *, int);
+*/
+
+#define dsize 5
+
+static void sb_check PARAMS ((sb *, int));
 
 /* Statistics of sb structures.  */
-static int string_count[sb_max_power_two];
+
+int string_count[sb_max_power_two];
 
 /* Free list of sb structures.  */
-static struct
-{
-  sb_element *size[sb_max_power_two];
-} free_list;
 
-/* Initializes an sb.  */
+static sb_list_vector free_list;
 
-static void
-sb_build (sb *ptr, int size)
+/* initializes an sb. */
+
+void
+sb_build (ptr, size)
+     sb *ptr;
+     int size;
 {
-  /* See if we can find one to allocate.  */
+  /* see if we can find one to allocate */
   sb_element *e;
 
-  gas_assert (size < sb_max_power_two);
+  if (size > sb_max_power_two)
+    abort ();
 
   e = free_list.size[size];
   if (!e)
     {
-      /* Nothing there, allocate one and stick into the free list.  */
+      /* nothing there, allocate one and stick into the free list */
       e = (sb_element *) xmalloc (sizeof (sb_element) + (1 << size));
       e->next = free_list.size[size];
       e->size = 1 << size;
@@ -72,85 +83,60 @@ sb_build (sb *ptr, int size)
       string_count[size]++;
     }
 
-  /* Remove from free list.  */
+  /* remove from free list */
+
   free_list.size[size] = e->next;
 
-  /* Copy into callers world.  */
+  /* copy into callers world */
   ptr->ptr = e->data;
   ptr->pot = size;
   ptr->len = 0;
   ptr->item = e;
 }
 
+
 void
-sb_new (sb *ptr)
+sb_new (ptr)
+     sb *ptr;
 {
   sb_build (ptr, dsize);
 }
 
-/* Deallocate the sb at ptr.  */
+/* deallocate the sb at ptr */
 
 void
-sb_kill (sb *ptr)
+sb_kill (ptr)
+     sb *ptr;
 {
-  /* Return item to free list.  */
+  /* return item to free list */
   ptr->item->next = free_list.size[ptr->pot];
   free_list.size[ptr->pot] = ptr->item;
 }
 
-/* Add the sb at s to the end of the sb at ptr.  */
+/* add the sb at s to the end of the sb at ptr */
 
 void
-sb_add_sb (sb *ptr, sb *s)
+sb_add_sb (ptr, s)
+     sb *ptr;
+     sb *s;
 {
   sb_check (ptr, s->len);
   memcpy (ptr->ptr + ptr->len, s->ptr, s->len);
   ptr->len += s->len;
 }
 
-/* Helper for sb_scrub_and_add_sb.  */
-
-static sb *sb_to_scrub;
-static char *scrub_position;
-static int
-scrub_from_sb (char *buf, int buflen)
-{
-  int copy;
-  copy = sb_to_scrub->len - (scrub_position - sb_to_scrub->ptr);
-  if (copy > buflen)
-    copy = buflen;
-  memcpy (buf, scrub_position, copy);
-  scrub_position += copy;
-  return copy;
-}
-
-/* Run the sb at s through do_scrub_chars and add the result to the sb
-   at ptr.  */
-
-void
-sb_scrub_and_add_sb (sb *ptr, sb *s)
-{
-  sb_to_scrub = s;
-  scrub_position = s->ptr;
-  
-  sb_check (ptr, s->len);
-  ptr->len += do_scrub_chars (scrub_from_sb, ptr->ptr + ptr->len, s->len);
-
-  sb_to_scrub = 0;
-  scrub_position = 0;
-}
-
-/* Make sure that the sb at ptr has room for another len characters,
-   and grow it if it doesn't.  */
+/* make sure that the sb at ptr has room for another len characters,
+   and grow it if it doesn't. */
 
 static void
-sb_check (sb *ptr, int len)
+sb_check (ptr, len)
+     sb *ptr;
+     int len;
 {
   if (ptr->len + len >= 1 << ptr->pot)
     {
       sb tmp;
       int pot = ptr->pot;
-
       while (ptr->len + len >= 1 << pot)
 	pot++;
       sb_build (&tmp, pot);
@@ -160,27 +146,32 @@ sb_check (sb *ptr, int len)
     }
 }
 
-/* Make the sb at ptr point back to the beginning.  */
+/* make the sb at ptr point back to the beginning.  */
 
 void
-sb_reset (sb *ptr)
+sb_reset (ptr)
+     sb *ptr;
 {
   ptr->len = 0;
 }
 
-/* Add character c to the end of the sb at ptr.  */
+/* add character c to the end of the sb at ptr. */
 
 void
-sb_add_char (sb *ptr, int c)
+sb_add_char (ptr, c)
+     sb *ptr;
+     int c;
 {
   sb_check (ptr, 1);
   ptr->ptr[ptr->len++] = c;
 }
 
-/* Add null terminated string s to the end of sb at ptr.  */
+/* add null terminated string s to the end of sb at ptr. */
 
 void
-sb_add_string (sb *ptr, const char *s)
+sb_add_string (ptr, s)
+     sb *ptr;
+     const char *s;
 {
   int len = strlen (s);
   sb_check (ptr, len);
@@ -188,31 +179,81 @@ sb_add_string (sb *ptr, const char *s)
   ptr->len += len;
 }
 
-/* Add string at s of length len to sb at ptr */
+/* add string at s of length len to sb at ptr */
 
 void
-sb_add_buffer (sb *ptr, const char *s, int len)
+sb_add_buffer (ptr, s, len)
+     sb *ptr;
+     const char *s;
+     int len;
 {
   sb_check (ptr, len);
   memcpy (ptr->ptr + ptr->len, s, len);
   ptr->len += len;
 }
 
-/* Like sb_name, but don't include the null byte in the string.  */
+/* print the sb at ptr to the output file */
+
+void
+sb_print (outfile, ptr)
+     FILE *outfile;
+     sb *ptr;
+{
+  int i;
+  int nc = 0;
+
+  for (i = 0; i < ptr->len; i++)
+    {
+      if (nc)
+	{
+	  fprintf (outfile, ",");
+	}
+      fprintf (outfile, "%d", ptr->ptr[i]);
+      nc = 1;
+    }
+}
+
+void 
+sb_print_at (outfile, idx, ptr)
+     FILE *outfile;
+     int idx;
+     sb *ptr;
+{
+  int i;
+  for (i = idx; i < ptr->len; i++)
+    putc (ptr->ptr[i], outfile);
+}
+
+/* put a null at the end of the sb at in and return the start of the
+   string, so that it can be used as an arg to printf %s. */
 
 char *
-sb_terminate (sb *in)
+sb_name (in)
+     sb *in;
+{
+  /* stick a null on the end of the string */
+  sb_add_char (in, 0);
+  return in->ptr;
+}
+
+/* like sb_name, but don't include the null byte in the string.  */
+
+char *
+sb_terminate (in)
+     sb *in;
 {
   sb_add_char (in, 0);
   --in->len;
   return in->ptr;
 }
 
-/* Start at the index idx into the string in sb at ptr and skip
-   whitespace. return the index of the first non whitespace character.  */
+/* start at the index idx into the string in sb at ptr and skip
+   whitespace. return the index of the first non whitespace character */
 
 int
-sb_skip_white (int idx, sb *ptr)
+sb_skip_white (idx, ptr)
+     int idx;
+     sb *ptr;
 {
   while (idx < ptr->len
 	 && (ptr->ptr[idx] == ' '
@@ -221,12 +262,14 @@ sb_skip_white (int idx, sb *ptr)
   return idx;
 }
 
-/* Start at the index idx into the sb at ptr. skips whitespace,
-   a comma and any following whitespace. returns the index of the
-   next character.  */
+/* start at the index idx into the sb at ptr. skips whitespace,
+   a comma and any following whitespace. returnes the index of the
+   next character. */
 
 int
-sb_skip_comma (int idx, sb *ptr)
+sb_skip_comma (idx, ptr)
+     int idx;
+     sb *ptr;
 {
   while (idx < ptr->len
 	 && (ptr->ptr[idx] == ' '

@@ -1,47 +1,21 @@
-/* corefile.h
-
-   Copyright 2000, 2001, 2002, 2004, 2007, 2009 Free Software Foundation, Inc.
-
-   This file is part of GNU Binutils.
-
-   This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
-   (at your option) any later version.
-
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
-
-   You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
-   MA 02110-1301, USA.  */
-
 #ifndef corefile_h
 #define corefile_h
 
-struct function_map
-{
-  char *         function_name;
-  char *         file_name;
-  unsigned int   is_first:1;	/* Is this the first symbol in an object file?  */
-};
+#include "bfd.h"
 
-extern struct function_map * symbol_map;
-extern unsigned int symbol_map_count;
+extern bfd *core_bfd;		/* bfd for core-file */
+extern int core_num_syms;	/* # of entries in symbol-table */
+extern asymbol **core_syms;	/* symbol table in a.out */
+extern asection *core_text_sect;	/* core text section */
+extern PTR core_text_space;	/* text space of a.out in core */
 
-extern bfd * core_bfd;		  /* BFD for core-file.  */
-extern asection * core_text_sect; /* Core text section.  */
-extern void * core_text_space;    /* Text space of a.out in core.  */
-extern int offset_to_code;	  /* Offset (in bytes) of code from entry
-				     address of routine.  */
+extern int min_insn_size;	/* size of smallest instruction, in bytes */
+extern int offset_to_code;	/* offset (in bytes) of code from entry
+				   address of routine */
 
-extern void core_init                  (const char *);
-extern void core_get_text_space        (bfd *);
-extern void core_create_function_syms  (void);
-extern void core_create_line_syms      (void);
-extern void core_create_syms_from      (const char *);
+extern void core_init PARAMS ((const char *a_out_name));
+extern void core_get_text_space PARAMS ((bfd * core_bfd));
+extern void core_create_function_syms PARAMS ((bfd * core_bfd));
+extern void core_create_line_syms PARAMS ((bfd * core_bfd));
 
 #endif /* corefile_h */

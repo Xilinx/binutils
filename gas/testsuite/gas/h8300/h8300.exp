@@ -2036,12 +2036,12 @@ proc do_h8300s_mac {} {
     # assembled correctly.
     while 1 {
 	expect {
- 	    -re " +\[0-9\]+ 0000 01A0\[^\n\]*\n"   { set x [expr $x+1] }
-	    -re " +\[0-9\]+ 0002 0324\[^\n\]*\n"   { set x [expr $x+1] }
-	    -re " +\[0-9\]+ 0004 0335\[^\n\]*\n"   { set x [expr $x+1] }
-	    -re " +\[0-9\]+ 0006 01606D45\[^\n\]*\n"   { set x [expr $x+1] }
-	    -re " +\[0-9\]+ 000a 0224\[^\n\]*\n"   { set x [expr $x+1] }
-	    -re " +\[0-9\]+ 000c 0235\[^\n\]*\n"   { set x [expr $x+1] }
+	    -re " +\[0-9\]+ 0000 01A0\[^\n\]*\n"   { set x [expr $x+1] }
+	    -re " +\[0-9\]+ 0002 0320\[^\n\]*\n"   { set x [expr $x+1] }
+	    -re " +\[0-9\]+ 0004 0331\[^\n\]*\n"   { set x [expr $x+1] }
+	    -re " +\[0-9\]+ 0006 01606D01\[^\n\]*\n"   { set x [expr $x+1] }
+	    -re " +\[0-9\]+ 000a 0220\[^\n\]*\n"   { set x [expr $x+1] }
+	    -re " +\[0-9\]+ 000c 0231\[^\n\]*\n"   { set x [expr $x+1] }
 	    eof					{ break }
 	}
     }
@@ -2070,13 +2070,6 @@ proc do_h8300s_multiple {} {
 	    -re " +\[0-9\]+ 000c 01106DF0\[^\n\]*\n"   { set x [expr $x+1] }
 	    -re " +\[0-9\]+ 0010 01206DF0\[^\n\]*\n"   { set x [expr $x+1] }
 	    -re " +\[0-9\]+ 0014 01306DF0\[^\n\]*\n"   { set x [expr $x+1] }
-            -re " +\[0-9\]+ 0018 01106D73\[^\n\]*\n"   { set x [expr $x+1] }
-            -re " +\[0-9\]+ 001c 01106DF2\[^\n\]*\n"   { set x [expr $x+1] }
-            -re " +\[0-9\]+ 0020 01106D75\[^\n\]*\n"   { set x [expr $x+1] }
-            -re " +\[0-9\]+ 0024 01206D76\[^\n\]*\n"   { set x [expr $x+1] }
-            -re " +\[0-9\]+ 0028 01106DF4\[^\n\]*\n"   { set x [expr $x+1] }
-            -re " +\[0-9\]+ 002c 01206DF4\[^\n\]*\n"   { set x [expr $x+1] }
-
 	    eof					{ break }
 	}
     }
@@ -2086,7 +2079,7 @@ proc do_h8300s_multiple {} {
     gas_finish
 
     # Did we find what we were looking for?  If not, flunk it.
-    if [expr $x == 12] then { pass $testname } else { fail $testname }
+    if [expr $x == 6] then { pass $testname } else { fail $testname }
 }
 
 proc do_h8300h_mov32bug {} {
@@ -2114,75 +2107,16 @@ proc do_h8300h_mov32bug {} {
     if [expr $x == 1] then { pass $testname } else { fail $testname }
 }
 
-proc do_h8300hn_addressgen {} {
-    set testname "symaddgen.s: h8300hn symbol address generation"
-    set x 0
-
-    gas_start "symaddgen.s" "-al"
-
-    # Check each instruction bit pattern to verify it got
-    # assembled correctly.
-    while 1 {
-	expect {
-	    -re " +\[0-9\]+ .* 01006DF6\[^\n\]*\n"   { set x [expr $x+1] }
-	    -re " +\[0-9\]+ .* 0D76\[^\n\]*\n"       { set x [expr $x+1] }
-	    -re " +\[0-9\]+ .* 790207D0\[^\n\]*\n"   { set x [expr $x+1] }
-	    -re " +\[0-9\]+ .* 6B82F020\[^\n\]*\n"   { set x [expr $x+1] }
-	    -re " +\[0-9\]+ .* 79022710\[^\n\]*\n"   { set x [expr $x+1] }
-	    -re " +\[0-9\]+ .* 6B820000\[^\n\]*\n"   { set x [expr $x+1] }
-	    -re " +\[0-9\]+ .* 01006D76\[^\n\]*\n"   { set x [expr $x+1] }
-	    -re " +\[0-9\]+ .* 5470\[^\n\]*\n"       { set x [expr $x+1] }
-            
-	    eof					{ break }
-	}
-    }
-    # This was intended to do any cleanup necessary.  It kinda looks like it
-    # isn't needed, but just in case, please keep it in for now.
-    gas_finish
-    # Did we find what we were looking for?  If not, flunk it.
-    if [expr $x == 8] then { pass $testname } else { fail $testname }
-}
-
-proc do_h8300_addsubrxcheck {} {
-    set testname "addsubrxcheck.s: h8300 check rx generation for adds subs instructions"
-    set x 0
-
-    gas_start "addsubrxcheck.s" "-al"
-
-    # Check each instruction bit pattern to verify it got
-    # assembled correctly.
-    while 1 {
-	expect {
-	    -re " +\[0-9\]+ .* 6DF6\[^\n\]*\n"       { set x [expr $x+1] }
-	    -re " +\[0-9\]+ .* 0D76\[^\n\]*\n"       { set x [expr $x+1] }
-	    -re " +\[0-9\]+ .* 1B87\[^\n\]*\n"       { set x [expr $x+1] }
-	    -re " +\[0-9\]+ .* 6F62FFFE\[^\n\]*\n"   { set x [expr $x+1] }
-	    -re " +\[0-9\]+ .* 1B82\[^\n\]*\n"       { set x [expr $x+1] }
-	    -re " +\[0-9\]+ .* 6FE2FFFE\[^\n\]*\n"   { set x [expr $x+1] }
-	    -re " +\[0-9\]+ .* 1922\[^\n\]*\n"       { set x [expr $x+1] }
-	    -re " +\[0-9\]+ .* 0D20\[^\n\]*\n"       { set x [expr $x+1] }
-	    -re " +\[0-9\]+ .* 0B87\[^\n\]*\n"       { set x [expr $x+1] }
-	    -re " +\[0-9\]+ .* 6D76\[^\n\]*\n"       { set x [expr $x+1] }
-	    -re " +\[0-9\]+ .* 5470\[^\n\]*\n"       { set x [expr $x+1] }
-
-	    eof					{ break }
-	}
-    }
-    # This was intended to do any cleanup necessary.  It kinda looks like it
-    # isn't needed, but just in case, please keep it in for now.
-    gas_finish
-    # Did we find what we were looking for?  If not, flunk it.
-    if [expr $x == 11] then { pass $testname } else { fail $testname }
-}
-
 if [istarget h8300*-*-*] then {
     # Test the basic h8300 instruction parser
     do_h8300_add_sub
     do_h8300_logical
+    do_h8300_cbranch
     do_h8300_bitops1
     do_h8300_bitops2
     do_h8300_bitops3
     do_h8300_bitops4
+    do_h8300_branch
     do_h8300_compare
     do_h8300_decimal
     do_h8300_incdec
@@ -2192,17 +2126,16 @@ if [istarget h8300*-*-*] then {
     do_h8300_movw
     do_h8300_pushpop
     do_h8300_rotate_shift
-    do_h8300hn_addressgen
-
-    do_h8300_addsubrxcheck
 
     # Now test the h8300h instruction parser
     do_h8300h_add_sub
     do_h8300h_logical
+    do_h8300h_cbranch
     do_h8300h_bitops1
     do_h8300h_bitops2
     do_h8300h_bitops3
     do_h8300h_bitops4
+    do_h8300h_branch
     do_h8300h_compare
     do_h8300h_decimal
     do_h8300h_incdec
@@ -2218,10 +2151,12 @@ if [istarget h8300*-*-*] then {
     # Now test the h8300s instruction parser
     do_h8300s_add_sub
     do_h8300s_logical
+    do_h8300s_cbranch
     do_h8300s_bitops1
     do_h8300s_bitops2
     do_h8300s_bitops3
     do_h8300s_bitops4
+    do_h8300s_branch
     do_h8300s_compare
     do_h8300s_decimal
     do_h8300s_incdec
@@ -2243,7 +2178,6 @@ if [istarget h8300*-*-*] then {
     set empic [expr [istarget *-*-ecoff*] || [istarget *-*-ultrix*] || [istarget *-*-irix\[1-4\]*] ]
     set aout [expr [istarget *-*-bsd*] || [istarget *-*-netbsd*]]
 
+    run_dump_test "ffxx1"
     gas_test "cmpsi2.s" "" "" "cmpsi2.s"
-
-    run_dump_test "pr3134"
 }

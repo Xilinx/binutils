@@ -1,12 +1,12 @@
 /* output-file.c -  Deal with the output file
-   Copyright 1987, 1990, 1991, 1992, 1993, 1994, 1996, 1998, 1999, 2001,
-   2003, 2004, 2005, 2006, 2007 Free Software Foundation, Inc.
+   Copyright (C) 1987, 90, 91, 93, 92, 94, 95, 96, 1998
+   Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
    GAS is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3, or (at your option)
+   the Free Software Foundation; either version 2, or (at your option)
    any later version.
 
    GAS is distributed in the hope that it will be useful,
@@ -16,56 +16,141 @@
 
    You should have received a copy of the GNU General Public License
    along with GAS; see the file COPYING.  If not, write to
-   the Free Software Foundation, 51 Franklin Street - Fifth Floor, Boston, MA
-   02110-1301, USA.  */
+   the Free Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
+
+#include <stdio.h>
 
 #include "as.h"
+
 #include "output-file.h"
 
+#ifdef BFD_HEADERS
+#define USE_BFD
+#endif
+
+#ifdef BFD_ASSEMBLER
+#define USE_BFD
 #ifndef TARGET_MACH
 #define TARGET_MACH 0
 #endif
+#endif
 
+#ifdef USE_BFD
+#include "bfd.h"
 bfd *stdoutput;
 
 void
-output_file_create (char *name)
+output_file_create (name)
+     char *name;
 {
   if (name[0] == '-' && name[1] == '\0')
-    as_fatal (_("can't open a bfd on stdout %s"), name);
-
+    {
+      as_fatal (_("Can't open a bfd on stdout %s "), name);
+    }
   else if (!(stdoutput = bfd_openw (name, TARGET_FORMAT)))
     {
-      bfd_error_type err = bfd_get_error ();
-
-      if (err == bfd_error_invalid_target)
-	as_fatal (_("selected target format '%s' unknown"), TARGET_FORMAT);
-      else
-	as_fatal (_("can't create %s: %s"), name, bfd_errmsg (err));
+      as_perror (_("FATAL: Can't create %s"), name);
+      exit (EXIT_FAILURE);
     }
-
   bfd_set_format (stdoutput, bfd_object);
+#ifdef BFD_ASSEMBLER
   bfd_set_arch_mach (stdoutput, TARGET_ARCH, TARGET_MACH);
+#endif
   if (flag_traditional_format)
     stdoutput->flags |= BFD_TRADITIONAL_FORMAT;
 }
 
 void
-output_file_close (char *filename)
+output_file_close (filename)
+     char *filename;
 {
-  bfd_boolean res;
+#ifdef BFD_ASSEMBLER
+  /* Close the bfd.  */
+  if (bfd_close (stdoutput) == 0)
+    {
+      bfd_perror (filename);
+      as_perror (_("FATAL: Can't close %s\n"), filename);
+      exit (EXIT_FAILURE);
+    }
+#else
+  /* Close the bfd without getting bfd to write out anything by itself */
+  if (bfd_close_all_done (stdoutput) == 0)
+    {
+      as_perror (_("FATAL: Can't close %s\n"), filename);
+      exit (EXIT_FAILURE);
+    }
+#endif
+  stdoutput = NULL;		/* Trust nobody! */
+}
+
+#ifndef BFD_ASSEMBLER
+void
+output_file_append (where, length, filename)
+     char *where;
+     long length;
+     char *filename;
+{
+  abort ();
+}
+#endif
+
+#else
+
+static FILE *stdoutput;
+
+void
+output_file_create (name)
+     char *name;
+{
+  if (name[0] == '-' && name[1] == '\0')
+    {
+      stdoutput = stdout;
+      return;
+    }
+
+  stdoutput = fopen (name, "wb");
+
+  /* Some systems don't grok "b" in fopen modes.  */
+  if (stdoutput == NULL)
+    stdoutput = fopen (name, "w");
 
   if (stdoutput == NULL)
-    return;
-    
-  /* Close the bfd.  */
-  res = bfd_close (stdoutput);
-
-  /* Prevent an infinite loop - if the close failed we will call as_fatal
-     which will call xexit() which may call this function again...  */
-  stdoutput = NULL;
-
-  if (! res)
-    as_fatal (_("can't close %s: %s"), filename,
-	      bfd_errmsg (bfd_get_error ()));
+    {
+      as_perror (_("FATAL: Can't create %s"), name);
+      exit (EXIT_FAILURE);
+    }
 }
+
+void
+output_file_close (filename)
+     char *filename;
+{
+  if (EOF == fclose (stdoutput))
+    {
+      as_perror (_("FATAL: Can't close %s"), filename);
+      exit (EXIT_FAILURE);
+    }
+  stdoutput = NULL;		/* Trust nobody! */
+}
+
+void
+output_file_append (where, length, filename)
+     char *where;
+     long length;
+     char *filename;
+{
+  for (; length; length--, where++)
+    {
+      (void) putc (*where, stdoutput);
+      if (ferror (stdoutput))
+	/* if ( EOF == (putc( *where, stdoutput )) ) */
+	{
+	  as_perror (_("Failed to emit an object byte"), filename);
+	  as_fatal (_("Can't continue"));
+	}
+    }
+}
+
+#endif
+
+/* end of output-file.c */

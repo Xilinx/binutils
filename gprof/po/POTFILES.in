@@ -1,6 +1,7 @@
 alpha.c
 basic_blocks.c
 basic_blocks.h
+bb_exit_func.c
 call_graph.c
 call_graph.h
 cg_arcs.c
@@ -22,7 +23,6 @@ hertz.h
 hist.c
 hist.h
 i386.c
-mips.c
 search_list.c
 search_list.h
 source.c

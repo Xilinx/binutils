@@ -11,7 +11,7 @@ public:
     static void init_foo ();
     static int nb_foos() { return foos; }
     Foo();
-    Foo(const char* message);
+    Foo( char* message);
     Foo(const Foo&);
     Foo & operator= (const Foo&);
     ~Foo ();
@@ -56,11 +56,6 @@ __throw ()
 }
 
 void
-__rethrow ()
-{
-}
-
-void
 __terminate ()
 {
 }
@@ -93,7 +88,7 @@ Foo::Foo ()
   i = ++foos;
 }
 
-Foo::Foo (const char*)
+Foo::Foo (char* msg)
 {
   i = ++foos;
 }
@@ -115,13 +110,4 @@ Foo& Foo::operator= (const Foo& foo)
 Foo::~Foo ()
 {
   foos--;
-}
-
-void *__dso_handle;
-
-extern "C"
-int
-__cxa_atexit (void)
-{
-  return 0;
 }

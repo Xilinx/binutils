@@ -1,13 +1,12 @@
 /* m68k.y -- bison grammar for m68k operand parsing
-   Copyright 1995, 1996, 1997, 1998, 2001, 2003, 2004, 2005, 2007, 2009
-   Free Software Foundation, Inc.
+   Copyright (C) 1995, 96, 1997, 1998 Free Software Foundation, Inc.
    Written by Ken Raeburn and Ian Lance Taylor, Cygnus Support
 
    This file is part of GAS, the GNU Assembler.
 
    GAS is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3, or (at your option)
+   the Free Software Foundation; either version 2, or (at your option)
    any later version.
 
    GAS is distributed in the hope that it will be useful,
@@ -17,8 +16,8 @@
 
    You should have received a copy of the GNU General Public License
    along with GAS; see the file COPYING.  If not, write to the Free
-   Software Foundation, 51 Franklin Street - Fifth Floor, Boston, MA
-   02110-1301, USA.  */
+   Software Foundation, 59 Temple Place - Suite 330, Boston, MA
+   02111-1307, USA.  */
 
 /* This file holds a bison grammar to parse m68k operands.  The m68k
    has a complicated operand syntax, and gas supports two main
@@ -30,13 +29,12 @@
 #include "as.h"
 #include "tc-m68k.h"
 #include "m68k-parse.h"
-#include "safe-ctype.h"
 
 /* Remap normal yacc parser interface names (yyparse, yylex, yyerror,
-   etc), as well as gratuitously global symbol names If other parser
+   etc), as well as gratuitiously global symbol names If other parser
    generators (bison, byacc, etc) produce additional global names that
    conflict at link time, then those parser generators need to be
-   fixed instead of adding those names to this list.  */
+   fixed instead of adding those names to this list. */
 
 #define	yymaxdepth m68k_maxdepth
 #define	yyparse	m68k_parse
@@ -83,9 +81,9 @@
 
 /* Internal functions.  */
 
-static enum m68k_register m68k_reg_parse (char **);
-static int yylex (void);
-static void yyerror (const char *);
+static enum m68k_register m68k_reg_parse PARAMS ((char **));
+static int yylex PARAMS ((void));
+static void yyerror PARAMS ((const char *));
 
 /* The parser sets fields pointed to by this global variable.  */
 static struct m68k_op *op;
@@ -99,7 +97,6 @@ static struct m68k_op *op;
   struct m68k_exp exp;
   unsigned long mask;
   int onereg;
-  int trailing_ampersand;
 }
 
 %token <reg> DR AR FPR FPCR LPC ZAR ZDR LZPC CREG
@@ -111,7 +108,6 @@ static struct m68k_op *op;
 %type <exp> optcexpr optexprc
 %type <mask> reglist ireglist reglistpair
 %type <onereg> reglistreg
-%type <trailing_ampersand> optional_ampersand
 
 %%
 
@@ -119,38 +115,14 @@ static struct m68k_op *op;
 
 operand:
 	  generic_operand
-	| motorola_operand optional_ampersand
-		{
-		  op->trailing_ampersand = $2;
-		}
-	| mit_operand optional_ampersand
-		{
-		  op->trailing_ampersand = $2;
-		}
-	;
-
-/* A trailing ampersand(for MAC/EMAC mask addressing).  */
-optional_ampersand:
-	/* empty */
-		{ $$ = 0; }
-	| '&'
-		{ $$ = 1; }
+	| motorola_operand
+	| mit_operand
 	;
 
 /* A generic operand.  */
 
 generic_operand:
-	  '<' '<'
-		{
-		  op->mode = LSH;
-		}
-
-	| '>' '>'
-		{
-		  op->mode = RSH;
-		}
-
-	| DR
+	  DR
 		{
 		  op->mode = DREG;
 		  op->reg = $1;
@@ -771,9 +743,9 @@ yylex ()
       /* In MRI mode, this can be the start of an octal number.  */
       if (flag_mri)
 	{
-	  if (ISDIGIT (str[1])
+	  if (isdigit (str[1])
 	      || ((str[1] == '+' || str[1] == '-')
-		  && ISDIGIT (str[2])))
+		  && isdigit (str[2])))
 	    break;
 	}
       /* Fall through.  */
@@ -784,21 +756,19 @@ yylex ()
     case '/':
     case '[':
     case ']':
-    case '<':
-    case '>':
       return *str++;
     case '+':
       /* It so happens that a '+' can only appear at the end of an
-	 operand, or if it is trailed by an '&'(see mac load insn).
-	 If it appears anywhere else, it must be a unary.  */
-      if (str[1] == '\0' || (str[1] == '&' && str[2] == '\0'))
+         operand.  If it appears anywhere else, it must be a unary
+         plus on an expression.  */
+      if (str[1] == '\0')
 	return *str++;
       break;
     case '-':
       /* A '-' can only appear in -(ar), rn-rn, or ar@-.  If it
          appears anywhere else, it must be a unary minus on an
-         expression, unless it it trailed by a '&'(see mac load insn).  */
-      if (str[1] == '\0' || (str[1] == '&' && str[2] == '\0'))
+         expression.  */
+      if (str[1] == '\0')
 	return *str++;
       s = str + 1;
       if (*s == '(')
@@ -959,7 +929,7 @@ yylex ()
 	{
 	  if (parens == 0
 	      && s > str
-	      && (s[-1] == ')' || ISALNUM (s[-1])))
+	      && (s[-1] == ')' || isalnum ((unsigned char) s[-1])))
 	    break;
 	  ++parens;
 	}
@@ -1010,20 +980,7 @@ yylex ()
 
     yylval.exp.pic_reloc = pic_none;
     cp = s - tail;
-    if (cp - 7 > str && cp[-7] == '@')
-      {
-	if (strncmp (cp - 7, "@TLSLDM", 7) == 0)
-	  {
-	    yylval.exp.pic_reloc = pic_tls_ldm;
-	    tail += 7;
-	  }
-	else if (strncmp (cp - 7, "@TLSLDO", 7) == 0)
-	  {
-	    yylval.exp.pic_reloc = pic_tls_ldo;
-	    tail += 7;
-	  }
-      }
-    else if (cp - 6 > str && cp[-6] == '@')
+    if (cp - 6 > str && cp[-6] == '@')
       {
 	if (strncmp (cp - 6, "@PLTPC", 6) == 0)
 	  {
@@ -1035,21 +992,6 @@ yylex ()
 	    yylval.exp.pic_reloc = pic_got_pcrel;
 	    tail += 6;
 	  }
-	else if (strncmp (cp - 6, "@TLSGD", 6) == 0)
-	  {
-	    yylval.exp.pic_reloc = pic_tls_gd;
-	    tail += 6;
-	  }
-	else if (strncmp (cp - 6, "@TLSIE", 6) == 0)
-	  {
-	    yylval.exp.pic_reloc = pic_tls_ie;
-	    tail += 6;
-	  }	
-	else if (strncmp (cp - 6, "@TLSLE", 6) == 0)
-	  {
-	    yylval.exp.pic_reloc = pic_tls_le;
-	    tail += 6;
-	  }	
       }
     else if (cp - 4 > str && cp[-4] == '@')
       {

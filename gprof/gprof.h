@@ -1,46 +1,37 @@
 /*
- * Copyright (c) 1983, 1993
- *      The Regents of the University of California.  All rights reserved.
+ * Copyright (c) 1983 Regents of the University of California.
+ * All rights reserved.
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in the
- *    documentation and/or other materials provided with the distribution.
- * 3. Neither the name of the University nor the names of its contributors
- *    may be used to endorse or promote products derived from this software
- *    without specific prior written permission.
+ * Redistribution and use in source and binary forms are permitted
+ * provided that: (1) source distributions retain this entire copyright
+ * notice and comment, and (2) distributions including binaries display
+ * the following acknowledgement:  ``This product includes software
+ * developed by the University of California, Berkeley and its contributors''
+ * in the documentation or other materials provided with the distribution
+ * and in all advertising materials mentioning features or use of this
+ * software. Neither the name of the University nor the names of its
+ * contributors may be used to endorse or promote products derived
+ * from this software without specific prior written permission.
+ * THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  *
- * THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
- * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
- * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
- * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
- * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
- * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
- * SUCH DAMAGE.
+ *      @(#)gprof.h     5.9 (Berkeley) 6/1/90
  */
 #ifndef gprof_h
 #define gprof_h
 
-#include "gconfig.h"
-
-#undef PACKAGE
+#include <ansidecl.h>
 
 /* Include the BFD sysdep.h file.  */
 #include "sysdep.h"
-#include "bfd.h"
 
 /* Undefine the BFD PACKAGE and VERSION macros before including the
    gprof config.h file.  */
 #undef PACKAGE
 #undef VERSION
+/* Also undefine BFD's `_' macro; we have our own definition.  */
+#undef _
 
 #include "gconfig.h"
 
@@ -58,7 +49,7 @@
 #define PATH_MAX	1024
 #endif
 
-#define	A_OUTNAME	"a.out"		/* default core filename */
+#define	A_OUTNAME	"a.out"	/* default core filename */
 #define	GMONNAME	"gmon.out"	/* default profile filename */
 #define	GMONSUM		"gmon.sum"	/* profile summary filename */
 
@@ -67,10 +58,34 @@
 #endif
 
 #ifdef ENABLE_NLS
-/* Undefine BFD's `_' macro - it uses dgetext() and we want to use gettext().  */
-#undef  _
-#define _(String) gettext (String)
+# include <libintl.h>
+# define _(String) gettext (String)
+# ifdef gettext_noop
+#  define N_(String) gettext_noop (String)
+# else
+#  define N_(String) (String)
+# endif
+#else
+/* Stubs that do something close enough.  */
+# define textdomain(String) (String)
+# define gettext(String) (String)
+# define dgettext(Domain,Message) (Message)
+# define dcgettext(Domain,Message,Type) (Message)
+# define bindtextdomain(Domain,Directory) (Domain)
+# define _(String) (String)
+# define N_(String) (String)
 #endif
+
+
+/*
+ * These may already be defined on some systems.  We could probably
+ * just use the BFD versions of these, since BFD has already dealt
+ * with this problem.
+ */
+#undef FALSE
+#define	FALSE	0
+#undef TRUE
+#define	TRUE	1
 
 #define STYLE_FLAT_PROFILE	(1<<0)
 #define STYLE_CALL_GRAPH	(1<<1)
@@ -108,6 +123,7 @@ typedef enum
   }
 File_Format;
 
+typedef int bool;
 typedef unsigned char UNIT[2];	/* unit of profiling */
 
 extern const char *whoami;	/* command-name, for error messages */
@@ -118,23 +134,24 @@ extern long hz;			/* ticks per second */
 /*
  * Command-line options:
  */
-extern int debug_level;			/* debug level */
+extern int debug_level;		/* debug level */
 extern int output_style;
-extern int output_width;		/* controls column width in index */
-extern bfd_boolean bsd_style_output;	/* as opposed to FSF style output */
-extern bfd_boolean demangle;		/* demangle symbol names? */
-extern bfd_boolean ignore_direct_calls;	/* don't count direct calls */
-extern bfd_boolean ignore_static_funcs;	/* suppress static functions */
-extern bfd_boolean ignore_zeros;	/* ignore unused symbols/files */
-extern bfd_boolean line_granularity;	/* function or line granularity? */
-extern bfd_boolean print_descriptions;	/* output profile description */
-extern bfd_boolean print_path;		/* print path or just filename? */
-extern bfd_boolean ignore_non_functions; /* Ignore non-function symbols.  */
+extern int output_width;	/* controls column width in index */
+extern bool bsd_style_output;	/* as opposed to FSF style output */
+extern bool demangle;		/* demangle symbol names? */
+extern bool discard_underscores;	/* discard leading underscores? */
+extern bool ignore_direct_calls;	/* don't count direct calls */
+extern bool ignore_static_funcs;	/* suppress static functions */
+extern bool ignore_zeros;	/* ignore unused symbols/files */
+extern bool line_granularity;	/* function or line granularity? */
+extern bool print_descriptions;	/* output profile description */
+extern bool print_path;		/* print path or just filename? */
+extern bool ignore_non_functions;/* Ignore non-function symbols.  */
 
-extern File_Format file_format;		/* requested file format */
+extern File_Format file_format;	/* requested file format */
 
-extern bfd_boolean first_output;	/* no output so far? */
+extern bool first_output;	/* no output so far? */
 
-extern void done (int status) ATTRIBUTE_NORETURN;
+extern void done PARAMS ((int status));
 
 #endif /* gprof_h */

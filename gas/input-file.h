@@ -1,12 +1,11 @@
 /* input_file.h header for input-file.c
-   Copyright 1987, 1992, 1993, 2000, 2003, 2005, 2006, 2007
-   Free Software Foundation, Inc.
+   Copyright (C) 1987, 1992 Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
    GAS is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3, or (at your option)
+   the Free Software Foundation; either version 2, or (at your option)
    any later version.
 
    GAS is distributed in the hope that it will be useful,
@@ -15,11 +14,11 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with GAS; see the file COPYING.  If not, write to the Free
-   Software Foundation, 51 Franklin Street - Fifth Floor, Boston, MA
-   02110-1301, USA.  */
+   along with GAS; see the file COPYING.  If not, write to
+   the Free Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 /*"input_file.c":Operating-system dependant functions to read source files.*/
+
 
 /*
  * No matter what the operating system, this module must provide the
@@ -52,15 +51,18 @@
  *
  * input_file_close ()			Closes opened file.
  *
- * All errors are reported so caller doesn't have to think
- * about I/O errors.
+ * All errors are reported (using as_perror) so caller doesn't have to think
+ * about I/O errors. No I/O errors are fatal: an end-of-file may be faked.
  */
 
-char *input_file_give_next_buffer (char *where);
-char *input_file_push (void);
-unsigned int input_file_buffer_size (void);
-void input_file_begin (void);
-void input_file_close (void);
-void input_file_end (void);
-void input_file_open (char *filename, int pre);
-void input_file_pop (char *arg);
+char *input_file_give_next_buffer PARAMS ((char *where));
+char *input_file_push PARAMS ((void));
+unsigned int input_file_buffer_size PARAMS ((void));
+int input_file_is_open PARAMS ((void));
+void input_file_begin PARAMS ((void));
+void input_file_close PARAMS ((void));
+void input_file_end PARAMS ((void));
+void input_file_open PARAMS ((char *filename, int pre));
+void input_file_pop PARAMS ((char *arg));
+
+/* end of input_file.h */

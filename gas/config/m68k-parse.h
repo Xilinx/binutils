@@ -1,12 +1,11 @@
 /* m68k-parse.h -- header file for m68k assembler
-   Copyright 1987, 1991, 1992, 1993, 1994, 1995, 1996, 1999, 2000,
-   2003, 2004, 2005, 2006, 2007, 2009 Free Software Foundation, Inc.
+   Copyright (C) 1987, 91, 92, 93, 94, 1995 Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
    GAS is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3, or (at your option)
+   the Free Software Foundation; either version 2, or (at your option)
    any later version.
 
    GAS is distributed in the hope that it will be useful,
@@ -16,8 +15,8 @@
 
    You should have received a copy of the GNU General Public License
    along with GAS; see the file COPYING.  If not, write to the Free
-   Software Foundation, 51 Franklin Street - Fifth Floor, Boston, MA
-   02110-1301, USA.  */
+   Software Foundation, 59 Temple Place - Suite 330, Boston, MA
+   02111-1307, USA.  */
 
 #ifndef M68K_PARSE_H
 #define M68K_PARSE_H
@@ -84,16 +83,8 @@ enum m68k_register
   ZPC,				/* Hack for Program space, but 0 addressing */
   SR,				/* Status Reg */
   CCR,				/* Condition code Reg */
-  ACC,				/* Accumulator Reg0 (EMAC or ACC on MAC).  */
-  ACC1,				/* Accumulator Reg 1 (EMAC).  */
-  ACC2,				/* Accumulator Reg 2 (EMAC).  */
-  ACC3,				/* Accumulator Reg 3 (EMAC).  */
-  ACCEXT01,			/* Accumulator extension 0&1 (EMAC).  */
-  ACCEXT23,			/* Accumulator extension 2&3 (EMAC).  */
-  MACSR,			/* MAC Status Reg */
-  MASK,				/* Modulus Reg */
 
-  /* These have to be grouped together for the movec instruction to work.  */
+  /* These have to be grouped together for the movec instruction to work. */
   USP,				/*  User Stack Pointer */
   ISP,				/*  Interrupt stack pointer */
   SFC,
@@ -101,7 +92,6 @@ enum m68k_register
   CACR,
   VBR,
   CAAR,
-  CPUCR,
   MSP,
   ITT0,
   ITT1,
@@ -111,30 +101,14 @@ enum m68k_register
   TC,
   SRP,
   URP,
-  BUSCR,			/* 68060 added these.  */
+  BUSCR,			/* 68060 added these */
   PCR,
-  ROMBAR,			/* mcf5200 added these.  */
-  RAMBAR_ALT,			/* Some CF chips have RAMBAR using
-				   RAMBAR0's number */
+  ROMBAR,			/* mcf5200 added these */
   RAMBAR0,
   RAMBAR1,
-  MMUBAR,			/* mcfv4e added these.  */
-  ROMBAR0,			/* mcfv4e added these.  */
-  ROMBAR1,			/* mcfv4e added these.  */
-  MPCR, EDRAMBAR, SECMBAR,	/* mcfv4e added these.  */
-  PCR1U0, PCR1L0, PCR1U1, PCR1L1,/* mcfv4e added these.  */
-  PCR2U0, PCR2L0, PCR2U1, PCR2L1,/* mcfv4e added these.  */
-  PCR3U0, PCR3L0, PCR3U1, PCR3L1,/* mcfv4e added these.  */
-  MBAR0, MBAR1,			/* mcfv4e added these.  */
-  ACR0, ACR1, ACR2, ACR3,       /* mcf5200 added these.  */
-  FLASHBAR, RAMBAR,  		/* mcf528x added these.  */
-  MBAR2,  		        /* mcf5249 added this.  */
   MBAR,
-  ASID,				/* m5475.  */
-  CAC,  		        /* fido added this.  */
-  MBO,
-#define last_movec_reg MBO
-  /* End of movec ordering constraints.  */
+#define last_movec_reg MBAR
+  /* end of movec ordering constraints */
 
   FPI,
   FPS,
@@ -191,44 +165,6 @@ enum m68k_register
   ZADDR5,
   ZADDR6,
   ZADDR7,
-
-  /* Upper and lower half of data and address registers.  Order *must*
-     be DATAxL, ADDRxL, DATAxU, ADDRxU.  */
-  DATA0L,			/* lower half of data registers */
-  DATA1L,
-  DATA2L,
-  DATA3L,
-  DATA4L,
-  DATA5L,
-  DATA6L,
-  DATA7L,
-
-  ADDR0L,			/* lower half of address registers */
-  ADDR1L,
-  ADDR2L,
-  ADDR3L,
-  ADDR4L,
-  ADDR5L,
-  ADDR6L,
-  ADDR7L,
-
-  DATA0U,			/* upper half of data registers */
-  DATA1U,
-  DATA2U,
-  DATA3U,
-  DATA4U,
-  DATA5U,
-  DATA6U,
-  DATA7U,
-
-  ADDR0U,			/* upper half of address registers */
-  ADDR1U,
-  ADDR2U,
-  ADDR3U,
-  ADDR4U,
-  ADDR5U,
-  ADDR6U,
-  ADDR7U,
 };
 
 /* Size information.  */
@@ -271,12 +207,7 @@ enum pic_relocation
   pic_plt_pcrel,		/* @PLTPC */
   pic_got_pcrel,		/* @GOTPC */
   pic_plt_off,			/* @PLT */
-  pic_got_off,			/* @GOT */
-  pic_tls_gd,			/* @TLSGD */
-  pic_tls_ldm,			/* @TLSLDM */
-  pic_tls_ldo,			/* @TLSLDO */
-  pic_tls_ie,			/* @TLSIE */
-  pic_tls_le			/* @TLSLE */
+  pic_got_off			/* @GOT */
 };
 #endif
 
@@ -313,8 +244,6 @@ enum m68k_operand_type
   BASE,
   POST,
   PRE,
-  LSH,  /* MAC/EMAC scalefactor '<<'.  */
-  RSH,  /* MAC/EMAC scalefactor '>>'.  */
   REGLST
 };
 
@@ -342,16 +271,13 @@ struct m68k_op
 
   /* The outer displacement.  */
   struct m68k_exp odisp;
-
-  /* Is a trailing '&' added to an <ea>? (for MAC/EMAC mask addressing).  */
-  int trailing_ampersand;
 };
 
 #endif /* ! defined (M68K_PARSE_H) */
 
 /* The parsing function.  */
 
-extern int m68k_ip_op (char *, struct m68k_op *);
+extern int m68k_ip_op PARAMS ((char *, struct m68k_op *));
 
 /* Whether register prefixes are optional.  */
 extern int flag_reg_prefix_optional;

@@ -18,3 +18,7 @@ foo:
 	nop
 	nop
 	.endif
+	.ifdef	EMPIC
+	nop
+	nop
+	.endif

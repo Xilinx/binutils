@@ -1,8 +1,7 @@
 # Makefile for program source directory in GNU NLS utilities package.
 # Copyright (C) 1995, 1996, 1997 by Ulrich Drepper <drepper@gnu.ai.mit.edu>
-# Copyright 2001, 2003, 2006, 2007, 2009 Free Software Foundation, Inc.
 #
-# This file may be copied and used freely without restrictions.  It can
+# This file file be copied and used freely without restrictions.  It can
 # be used in projects which are not available under the GNU Public License
 # but which still want to provide support for the GNU gettext functionality.
 # Please note that the actual code is *not* freely available.
@@ -16,7 +15,6 @@ SHELL = /bin/sh
 srcdir = @srcdir@
 top_srcdir = @top_srcdir@
 VPATH = @srcdir@
-top_builddir = @top_builddir@
 
 prefix = @prefix@
 exec_prefix = @exec_prefix@
@@ -25,8 +23,6 @@ localedir = $(datadir)/locale
 gnulocaledir = $(prefix)/share/locale
 gettextsrcdir = $(prefix)/share/gettext/po
 subdir = po
-
-DESTDIR =
 
 INSTALL = @INSTALL@
 INSTALL_DATA = @INSTALL_DATA@
@@ -50,16 +46,10 @@ COMPILE = $(CC) -c $(DEFS) $(INCLUDES) $(CPPFLAGS) $(CFLAGS) $(XCFLAGS)
 SOURCES = cat-id-tbl.c
 POFILES = @POFILES@
 GMOFILES = @GMOFILES@
-DISTFILES = ChangeLog Makefile.in.in SRC-POTFILES.in BLD-POTFILES.in $(PACKAGE).pot \
+DISTFILES = ChangeLog Makefile.in.in POTFILES.in $(PACKAGE).pot \
 stamp-cat-id $(POFILES) $(GMOFILES) $(SOURCES)
 
-# Note - the following line gets processed by bfd/configure and amended
-# to contain the full list of source dir POTFILES.
-SRC-POTFILES = \
-
-# Note - the following line gets processed by bfd/configure and amended
-# to contain the full list of build dir POTFILES.
-BLD-POTFILES = \
+POTFILES = \
 
 CATALOGS = @CATALOGS@
 CATOBJEXT = @CATOBJEXT@
@@ -79,7 +69,7 @@ INSTOBJEXT = @INSTOBJEXT@
 	$(MSGFMT) -o $@ $<
 
 .po.gmo:
-	file=`echo $* | sed 's,.*/,,'`.gmo \
+	file=$(srcdir)/`echo $* | sed 's,.*/,,'`.gmo \
 	  && rm -f $$file && $(GMSGFMT) -o $$file $<
 
 .po.cat:
@@ -92,19 +82,10 @@ all: all-@USE_NLS@
 all-yes: $(CATALOGS) @MAINT@ $(PACKAGE).pot
 all-no:
 
-$(srcdir)/$(PACKAGE).pot: $(SRC-POTFILES) $(BLD-POTFILES)
-	$(XGETTEXT) --default-domain=$(PACKAGE) \
-	  --directory=$(top_srcdir) \
+$(srcdir)/$(PACKAGE).pot: $(POTFILES)
+	$(XGETTEXT) --default-domain=$(PACKAGE) --directory=$(top_srcdir) \
 	  --add-comments --keyword=_ --keyword=N_ \
-	  --msgid-bugs-address=bug-binutils@gnu.org \
-	  --files-from=$(srcdir)/SRC-POTFILES.in 
-	$(XGETTEXT) --default-domain=$(PACKAGE) \
-	  --directory=.. \
-	  --directory=. \
-	  --add-comments --keyword=_ --keyword=N_ \
-	  --join-existing \
-	  --msgid-bugs-address=bug-binutils@gnu.org \
-	  --files-from=$(srcdir)/BLD-POTFILES.in
+	  --files-from=$(srcdir)/POTFILES.in
 	rm -f $(srcdir)/$(PACKAGE).pot
 	mv $(PACKAGE).po $(srcdir)/$(PACKAGE).pot
 
@@ -126,15 +107,13 @@ $(srcdir)/stamp-cat-id: $(PACKAGE).pot
 install: install-exec install-data
 install-exec:
 install-info:
-install-html:
-install-pdf:
 install-data: install-data-@USE_NLS@
 install-data-no: all
 install-data-yes: all
 	if test -r $(MKINSTALLDIRS); then \
-	  $(MKINSTALLDIRS) $(DESTDIR)$(datadir); \
+	  $(MKINSTALLDIRS) $(datadir); \
 	else \
-	  $(top_srcdir)/mkinstalldirs $(DESTDIR)$(datadir); \
+	  $(top_srcdir)/mkinstalldirs $(datadir); \
 	fi
 	@catalogs='$(CATALOGS)'; \
 	for cat in $$catalogs; do \
@@ -144,7 +123,7 @@ install-data-yes: all
 	    *)     destdir=$(localedir);; \
 	  esac; \
 	  lang=`echo $$cat | sed 's/\$(CATOBJEXT)$$//'`; \
-	  dir=$(DESTDIR)$$destdir/$$lang/LC_MESSAGES; \
+	  dir=$$destdir/$$lang/LC_MESSAGES; \
 	  if test -r $(MKINSTALLDIRS); then \
 	    $(MKINSTALLDIRS) $$dir; \
 	  else \
@@ -174,12 +153,12 @@ install-data-yes: all
 	done
 	if test "$(PACKAGE)" = "gettext"; then \
 	  if test -r $(MKINSTALLDIRS); then \
-	    $(MKINSTALLDIRS) $(DESTDIR)$(gettextsrcdir); \
+	    $(MKINSTALLDIRS) $(gettextsrcdir); \
 	  else \
-	    $(top_srcdir)/mkinstalldirs $(DESTDIR)$(gettextsrcdir); \
+	    $(top_srcdir)/mkinstalldirs $(gettextsrcdir); \
 	  fi; \
 	  $(INSTALL_DATA) $(srcdir)/Makefile.in.in \
-			  $(DESTDIR)$(gettextsrcdir)/Makefile.in.in; \
+			  $(gettextsrcdir)/Makefile.in.in; \
 	else \
 	  : ; \
 	fi
@@ -192,18 +171,18 @@ uninstall:
 	for cat in $$catalogs; do \
 	  cat=`basename $$cat`; \
 	  lang=`echo $$cat | sed 's/\$(CATOBJEXT)$$//'`; \
-	  rm -f $(DESTDIR)$(localedir)/$$lang/LC_MESSAGES/$(PACKAGE)$(INSTOBJEXT); \
-	  rm -f $(DESTDIR)$(localedir)/$$lang/LC_MESSAGES/$(PACKAGE)$(INSTOBJEXT).m; \
-	  rm -f $(DESTDIR)$(gnulocaledir)/$$lang/LC_MESSAGES/$(PACKAGE)$(INSTOBJEXT); \
-	  rm -f $(DESTDIR)$(gnulocaledir)/$$lang/LC_MESSAGES/$(PACKAGE)$(INSTOBJEXT).m; \
+	  rm -f $(localedir)/$$lang/LC_MESSAGES/$(PACKAGE)$(INSTOBJEXT); \
+	  rm -f $(localedir)/$$lang/LC_MESSAGES/$(PACKAGE)$(INSTOBJEXT).m; \
+	  rm -f $(gnulocaledir)/$$lang/LC_MESSAGES/$(PACKAGE)$(INSTOBJEXT); \
+	  rm -f $(gnulocaledir)/$$lang/LC_MESSAGES/$(PACKAGE)$(INSTOBJEXT).m; \
 	done
-	rm -f $(DESTDIR)$(gettextsrcdir)/po-Makefile.in.in
+	rm -f $(gettextsrcdir)/po-Makefile.in.in
 
 check: all
 
 cat-id-tbl.o: ../intl/libgettext.h
 
-html dvi pdf ps info tags TAGS ID:
+dvi info tags TAGS ID:
 
 mostlyclean:
 	rm -f core core.* *.pox $(PACKAGE).po *.old.po cat-id-tbl.tmp
@@ -212,13 +191,12 @@ mostlyclean:
 clean: mostlyclean
 
 distclean: clean
-	rm -f Makefile Makefile.in *.mo *.msg *.cat *.cat.m
-	rm -f SRC-POTFILES BLD-POTFILES 
+	rm -f Makefile Makefile.in POTFILES *.mo *.msg *.cat *.cat.m
 
 maintainer-clean: distclean
 	@echo "This command is intended for maintainers to use;"
 	@echo "it deletes files that may require special tools to rebuild."
-	rm -f $(GMOFILES) SRC-POTFILES.in BLD-POTFILES.in
+	rm -f $(GMOFILES)
 
 distdir = ../$(PACKAGE)-$(VERSION)/$(subdir)
 dist distdir: update-po $(DISTFILES)
@@ -247,48 +225,23 @@ update-po: Makefile
 	  fi; \
 	done
 
-SRC-POTFILES: SRC-POTFILES.in
+POTFILES: POTFILES.in
 	( if test 'x$(srcdir)' != 'x.'; then \
 	    posrcprefix='$(top_srcdir)/'; \
 	  else \
 	    posrcprefix="../"; \
 	  fi; \
 	  rm -f $@-t $@ \
-	    && (sed -e '/^#/d' \
-	            -e '/^[ 	]*$$/d' \
+	    && (sed -e '/^#/d' -e '/^[ 	]*$$/d' \
 		    -e "s@.*@	$$posrcprefix& \\\\@" < $(srcdir)/$@.in \
 		| sed -e '$$s/\\$$//') > $@-t \
 	    && chmod a-w $@-t \
 	    && mv $@-t $@ )
 
-BLD-POTFILES: BLD-POTFILES.in
-	  ( rm -f $@-t $@ \
-	    && (sed -e '/^#/d' \
-	            -e '/^[ 	]*$$/d' \
-		    -e "s@.*@	../& \\\\@" < $(srcdir)/$@.in \
-		| sed -e '$$s/\\$$//') > $@-t \
-	    && chmod a-w $@-t \
-	    && mv $@-t $@ )
+POTFILES.in: @MAINT@ ../Makefile
+	cd .. && $(MAKE) po/POTFILES.in
 
-SRC-POTFILES.in: @MAINT@ ../Makefile
-	cd .. && $(MAKE) po/SRC-POTFILES.in
-
-BLD-POTFILES.in: @MAINT@ ../Makefile
-	cd .. && $(MAKE) po/BLD-POTFILES.in
-
-# Note - The presence of SRC-POTFILES and BLD-POTFILES as dependencies
-# here breaks the implementation of the 'distclean' rule for maintainers.
-# This is because if 'make distclean' is run in the BFD directory, the
-# Makefile there will be deleted before 'distclean' is made here, and so
-# the dependency SRC-POTFILES -> SRC-POTFILES.in -> ../Makefile cannot
-# be satisfied.
-#
-# The SRC-POTFILES and BLD-POTFILES dependencies cannot be removed,
-# however since it is necessary that these files be built during
-# *configure* time, so that configure can insert them into the
-# po/Makefile that it is creating, so that the Makefile will have
-# the correct dependencies.
-Makefile: Make-in ../config.status SRC-POTFILES BLD-POTFILES
+Makefile: Make-in ../config.status POTFILES
 	cd .. \
 	  && CONFIG_FILES=$(subdir)/Makefile.in:$(subdir)/Make-in \
 	     CONFIG_HEADERS= $(SHELL) ./config.status

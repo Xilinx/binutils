@@ -1,14 +1,12 @@
 /* rescoff.c -- read and write resources in Windows COFF files.
-   Copyright 1997, 1998, 1999, 2000, 2003, 2005, 2007, 2008
-   Free Software Foundation, Inc.
+   Copyright 1997, 1998 Free Software Foundation, Inc.
    Written by Ian Lance Taylor, Cygnus Support.
-   Rewritten by Kai Tietz, Onevision.
 
    This file is part of GNU Binutils.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
+   the Free Software Foundation; either version 2 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -18,13 +16,12 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston, MA
-   02110-1301, USA.  */
+   Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA
+   02111-1307, USA.  */
 
 /* This file contains function that read and write Windows resources
    in COFF files.  */
 
-#include "sysdep.h"
 #include "bfd.h"
 #include "bucomm.h"
 #include "libiberty.h"
@@ -50,12 +47,14 @@ struct coff_file_info
   /* End of data read from file.  */
   const bfd_byte *data_end;
   /* Address of the resource section minus the image base of the file.  */
-  rc_uint_type secaddr;
+  bfd_vma secaddr;
+  /* Non-zero if the file is big endian.  */
+  int big_endian;
 };
 
 /* A resource directory table in a COFF file.  */
 
-struct __attribute__ ((__packed__)) extern_res_directory
+struct extern_res_directory
 {
   /* Characteristics.  */
   bfd_byte characteristics[4];
@@ -96,24 +95,29 @@ struct extern_res_data
   bfd_byte reserved[4];
 };
 
+/* Macros to swap in values.  */
+
+#define getfi_16(fi, s) ((fi)->big_endian ? bfd_getb16 (s) : bfd_getl16 (s))
+#define getfi_32(fi, s) ((fi)->big_endian ? bfd_getb32 (s) : bfd_getl32 (s))
+
 /* Local functions.  */
 
-static void overrun (const struct coff_file_info *, const char *);
-static rc_res_directory *read_coff_res_dir (windres_bfd *, const bfd_byte *,
-					    const struct coff_file_info *,
-					    const rc_res_id *, int);
-static rc_res_resource *read_coff_data_entry (windres_bfd *, const bfd_byte *,
-					      const struct coff_file_info *,
-					      const rc_res_id *);
+static void overrun PARAMS ((const struct coff_file_info *, const char *));
+static struct res_directory *read_coff_res_dir
+  PARAMS ((const bfd_byte *, const struct coff_file_info *,
+	   const struct res_id *, int));
+static struct res_resource *read_coff_data_entry
+  PARAMS ((const bfd_byte *, const struct coff_file_info *,
+	   const struct res_id *));
 
 /* Read the resources in a COFF file.  */
 
-rc_res_directory *
-read_coff_rsrc (const char *filename, const char *target)
+struct res_directory *
+read_coff_rsrc (filename, target)
+     const char *filename;
+     const char *target;
 {
-  rc_res_directory *ret;
   bfd *abfd;
-  windres_bfd wrbfd;
   char **matching;
   asection *sec;
   bfd_size_type size;
@@ -138,52 +142,57 @@ read_coff_rsrc (const char *filename, const char *target)
   sec = bfd_get_section_by_name (abfd, ".rsrc");
   if (sec == NULL)
     {
-      fatal (_("%s: no resource section"), filename);
+      fprintf (stderr, _("%s: %s: no resource section\n"), program_name,
+	       filename);
+      xexit (1);
     }
 
-  set_windres_bfd (&wrbfd, abfd, sec, WR_KIND_BFD);
   size = bfd_section_size (abfd, sec);
   data = (bfd_byte *) res_alloc (size);
 
-  get_windres_bfd_content (&wrbfd, data, 0, size);
+  if (! bfd_get_section_contents (abfd, sec, data, 0, size))
+    bfd_fatal (_("can't read resource section"));
 
   finfo.filename = filename;
   finfo.data = data;
   finfo.data_end = data + size;
   finfo.secaddr = (bfd_get_section_vma (abfd, sec)
 		   - pe_data (abfd)->pe_opthdr.ImageBase);
+  finfo.big_endian = bfd_big_endian (abfd);
+
+  bfd_close (abfd);
 
   /* Now just read in the top level resource directory.  Note that we
      don't free data, since we create resource entries that point into
      it.  If we ever want to free up the resource information we read,
      this will have to be cleaned up.  */
 
-  ret = read_coff_res_dir (&wrbfd, data, &finfo, (const rc_res_id *) NULL, 0);
-  
-  bfd_close (abfd);
-
-  return ret;
+  return read_coff_res_dir (data, &finfo, (const struct res_id *) NULL, 0);
 }
 
 /* Give an error if we are out of bounds.  */
 
 static void
-overrun (const struct coff_file_info *finfo, const char *msg)
+overrun (finfo, msg)
+     const struct coff_file_info *finfo;
+     const char *msg;
 {
   fatal (_("%s: %s: address out of bounds"), finfo->filename, msg);
 }
 
 /* Read a resource directory.  */
 
-static rc_res_directory *
-read_coff_res_dir (windres_bfd *wrbfd, const bfd_byte *data,
-		   const struct coff_file_info *finfo,
-		   const rc_res_id *type, int level)
+static struct res_directory *
+read_coff_res_dir (data, finfo, type, level)
+     const bfd_byte *data;
+     const struct coff_file_info *finfo;
+     const struct res_id *type;
+     int level;
 {
   const struct extern_res_directory *erd;
-  rc_res_directory *rd;
+  struct res_directory *rd;
   int name_count, id_count, i;
-  rc_res_entry **pp;
+  struct res_entry **pp;
   const struct extern_res_entry *ere;
 
   if ((size_t) (finfo->data_end - data) < sizeof (struct extern_res_directory))
@@ -191,15 +200,15 @@ read_coff_res_dir (windres_bfd *wrbfd, const bfd_byte *data,
 
   erd = (const struct extern_res_directory *) data;
 
-  rd = (rc_res_directory *) res_alloc (sizeof (rc_res_directory));
-  rd->characteristics = windres_get_32 (wrbfd, erd->characteristics, 4);
-  rd->time = windres_get_32 (wrbfd, erd->time, 4);
-  rd->major = windres_get_16 (wrbfd, erd->major, 2);
-  rd->minor = windres_get_16 (wrbfd, erd->minor, 2);
+  rd = (struct res_directory *) res_alloc (sizeof *rd);
+  rd->characteristics = getfi_32 (finfo, erd->characteristics);
+  rd->time = getfi_32 (finfo, erd->time);
+  rd->major = getfi_16 (finfo, erd->major);
+  rd->minor = getfi_16 (finfo, erd->minor);
   rd->entries = NULL;
 
-  name_count = windres_get_16 (wrbfd, erd->name_count, 2);
-  id_count = windres_get_16 (wrbfd, erd->id_count, 2);
+  name_count = getfi_16 (finfo, erd->name_count);
+  id_count = getfi_16 (finfo, erd->id_count);
 
   pp = &rd->entries;
 
@@ -209,33 +218,33 @@ read_coff_res_dir (windres_bfd *wrbfd, const bfd_byte *data,
 
   for (i = 0; i < name_count; i++, ere++)
     {
-      rc_uint_type name, rva;
-      rc_res_entry *re;
+      unsigned long name, rva;
+      struct res_entry *re;
       const bfd_byte *ers;
       int length, j;
 
       if ((const bfd_byte *) ere >= finfo->data_end)
 	overrun (finfo, _("named directory entry"));
 
-      name = windres_get_32 (wrbfd, ere->name, 4);
-      rva = windres_get_32 (wrbfd, ere->rva, 4);
+      name = getfi_32 (finfo, ere->name);
+      rva = getfi_32 (finfo, ere->rva);
 
       /* For some reason the high bit in NAME is set.  */
       name &=~ 0x80000000;
 
-      if (name > (rc_uint_type) (finfo->data_end - finfo->data))
+      if (name > (size_t) (finfo->data_end - finfo->data))
 	overrun (finfo, _("directory entry name"));
 
       ers = finfo->data + name;
 
-      re = (rc_res_entry *) res_alloc (sizeof *re);
+      re = (struct res_entry *) res_alloc (sizeof *re);
       re->next = NULL;
       re->id.named = 1;
-      length = windres_get_16 (wrbfd, ers, 2);
+      length = getfi_16 (finfo, ers);
       re->id.u.n.length = length;
       re->id.u.n.name = (unichar *) res_alloc (length * sizeof (unichar));
       for (j = 0; j < length; j++)
-	re->id.u.n.name[j] = windres_get_16 (wrbfd, ers + j * 2 + 2, 2);
+	re->id.u.n.name[j] = getfi_16 (finfo, ers + j * 2 + 2);
 
       if (level == 0)
 	type = &re->id;
@@ -243,18 +252,18 @@ read_coff_res_dir (windres_bfd *wrbfd, const bfd_byte *data,
       if ((rva & 0x80000000) != 0)
 	{
 	  rva &=~ 0x80000000;
-	  if (rva >= (rc_uint_type) (finfo->data_end - finfo->data))
+	  if (rva >= (size_t) (finfo->data_end - finfo->data))
 	    overrun (finfo, _("named subdirectory"));
 	  re->subdir = 1;
-	  re->u.dir = read_coff_res_dir (wrbfd, finfo->data + rva, finfo, type,
+	  re->u.dir = read_coff_res_dir (finfo->data + rva, finfo, type,
 					 level + 1);
 	}
       else
 	{
-	  if (rva >= (rc_uint_type) (finfo->data_end - finfo->data))
+	  if (rva >= (size_t) (finfo->data_end - finfo->data))
 	    overrun (finfo, _("named resource"));
 	  re->subdir = 0;
-	  re->u.res = read_coff_data_entry (wrbfd, finfo->data + rva, finfo, type);
+	  re->u.res = read_coff_data_entry (finfo->data + rva, finfo, type);
 	}
 
       *pp = re;
@@ -264,15 +273,15 @@ read_coff_res_dir (windres_bfd *wrbfd, const bfd_byte *data,
   for (i = 0; i < id_count; i++, ere++)
     {
       unsigned long name, rva;
-      rc_res_entry *re;
+      struct res_entry *re;
 
       if ((const bfd_byte *) ere >= finfo->data_end)
 	overrun (finfo, _("ID directory entry"));
 
-      name = windres_get_32 (wrbfd, ere->name, 4);
-      rva = windres_get_32 (wrbfd, ere->rva, 4);
+      name = getfi_32 (finfo, ere->name);
+      rva = getfi_32 (finfo, ere->rva);
 
-      re = (rc_res_entry *) res_alloc (sizeof *re);
+      re = (struct res_entry *) res_alloc (sizeof *re);
       re->next = NULL;
       re->id.named = 0;
       re->id.u.id = name;
@@ -283,18 +292,18 @@ read_coff_res_dir (windres_bfd *wrbfd, const bfd_byte *data,
       if ((rva & 0x80000000) != 0)
 	{
 	  rva &=~ 0x80000000;
-	  if (rva >= (rc_uint_type) (finfo->data_end - finfo->data))
+	  if (rva >= (size_t) (finfo->data_end - finfo->data))
 	    overrun (finfo, _("ID subdirectory"));
 	  re->subdir = 1;
-	  re->u.dir = read_coff_res_dir (wrbfd, finfo->data + rva, finfo, type,
+	  re->u.dir = read_coff_res_dir (finfo->data + rva, finfo, type,
 					 level + 1);
 	}
       else
 	{
-	  if (rva >= (rc_uint_type) (finfo->data_end - finfo->data))
+	  if (rva >= (size_t) (finfo->data_end - finfo->data))
 	    overrun (finfo, _("ID resource"));
 	  re->subdir = 0;
-	  re->u.res = read_coff_data_entry (wrbfd, finfo->data + rva, finfo, type);
+	  re->u.res = read_coff_data_entry (finfo->data + rva, finfo, type);
 	}
 
       *pp = re;
@@ -306,14 +315,15 @@ read_coff_res_dir (windres_bfd *wrbfd, const bfd_byte *data,
 
 /* Read a resource data entry.  */
 
-static rc_res_resource *
-read_coff_data_entry (windres_bfd *wrbfd, const bfd_byte *data,
-		      const struct coff_file_info *finfo,
-		      const rc_res_id *type)
+static struct res_resource *
+read_coff_data_entry (data, finfo, type)
+     const bfd_byte *data;
+     const struct coff_file_info *finfo;
+     const struct res_id *type;
 {
   const struct extern_res_data *erd;
-  rc_res_resource *r;
-  rc_uint_type size, rva;
+  struct res_resource *r;
+  unsigned long size, rva;
   const bfd_byte *resdata;
 
   if (type == NULL)
@@ -324,22 +334,22 @@ read_coff_data_entry (windres_bfd *wrbfd, const bfd_byte *data,
 
   erd = (const struct extern_res_data *) data;
 
-  size = windres_get_32 (wrbfd, erd->size, 4);
-  rva = windres_get_32 (wrbfd, erd->rva, 4);
+  size = getfi_32 (finfo, erd->size);
+  rva = getfi_32 (finfo, erd->rva);
   if (rva < finfo->secaddr
-      || rva - finfo->secaddr >= (rc_uint_type) (finfo->data_end - finfo->data))
+      || rva - finfo->secaddr >= (size_t) (finfo->data_end - finfo->data))
     overrun (finfo, _("resource data"));
 
   resdata = finfo->data + (rva - finfo->secaddr);
 
-  if (size > (rc_uint_type) (finfo->data_end - resdata))
+  if (size > (size_t) (finfo->data_end - resdata))
     overrun (finfo, _("resource data size"));
 
-  r = bin_to_res (wrbfd, *type, resdata, size);
+  r = bin_to_res (*type, resdata, size, finfo->big_endian);
 
-  memset (&r->res_info, 0, sizeof (rc_res_res_info));
-  r->coff_info.codepage = windres_get_32 (wrbfd, erd->codepage, 4);
-  r->coff_info.reserved = windres_get_32 (wrbfd, erd->reserved, 4);
+  memset (&r->res_info, 0, sizeof (struct res_res_info));
+  r->coff_info.codepage = getfi_32 (finfo, erd->codepage);
+  r->coff_info.reserved = getfi_32 (finfo, erd->reserved);
 
   return r;
 }
@@ -349,19 +359,9 @@ read_coff_data_entry (windres_bfd *wrbfd, const bfd_byte *data,
 struct bindata_build
 {
   /* The data.  */
-  bindata *d;
+  struct bindata *d;
   /* The last structure we have added to the list.  */
-  bindata *last;
-  /* The size of the list as a whole.  */
-  unsigned long length;
-};
-
-struct coff_res_data_build
-{
-  /* The data.  */
-  coff_res_data *d;
-  /* The last structure we have added to the list.  */
-  coff_res_data *last;
+  struct bindata *last;
   /* The size of the list as a whole.  */
   unsigned long length;
 };
@@ -373,7 +373,9 @@ struct coff_write_info
 {
   /* These fields are based on the BFD.  */
   /* The BFD itself.  */
-  windres_bfd *wrbfd;
+  bfd *abfd;
+  /* Non-zero if the file is big endian.  */
+  int big_endian;
   /* Pointer to section symbol used to build RVA relocs.  */
   asymbol **sympp;
 
@@ -393,19 +395,27 @@ struct coff_write_info
   /* Resource data entries.  */
   struct bindata_build dataents;
   /* Actual resource data.  */
-  struct coff_res_data_build resources;
+  struct bindata_build resources;
   /* Relocations.  */
   arelent **relocs;
   /* Number of relocations.  */
   unsigned int reloc_count;
 };
 
-static void coff_bin_sizes (const rc_res_directory *, struct coff_write_info *);
-static bfd_byte *coff_alloc (struct bindata_build *, rc_uint_type);
+/* Macros to swap out values.  */
+
+#define putcwi_16(cwi, v, s) \
+  ((cwi->big_endian) ? bfd_putb16 ((v), (s)) : bfd_putl16 ((v), (s)))
+#define putcwi_32(cwi, v, s) \
+  ((cwi->big_endian) ? bfd_putb32 ((v), (s)) : bfd_putl32 ((v), (s)))
+
+static void coff_bin_sizes
+  PARAMS ((const struct res_directory *, struct coff_write_info *));
+static unsigned char *coff_alloc PARAMS ((struct bindata_build *, size_t));
 static void coff_to_bin
-  (const rc_res_directory *, struct coff_write_info *);
+  PARAMS ((const struct res_directory *, struct coff_write_info *));
 static void coff_res_to_bin
-  (const rc_res_resource *, struct coff_write_info *);
+  PARAMS ((const struct res_resource *, struct coff_write_info *));
 
 /* Write resources to a COFF file.  RESOURCES should already be
    sorted.
@@ -416,15 +426,15 @@ static void coff_res_to_bin
    adding the .rsrc section.  */
 
 void
-write_coff_file (const char *filename, const char *target,
-		 const rc_res_directory *resources)
+write_coff_file (filename, target, resources)
+     const char *filename;
+     const char *target;
+     const struct res_directory *resources;
 {
   bfd *abfd;
   asection *sec;
   struct coff_write_info cwi;
-  windres_bfd wrbfd;
-  bindata *d;
-  coff_res_data *rd;
+  struct bindata *d;
   unsigned long length, offset;
 
   if (filename == NULL)
@@ -437,29 +447,21 @@ write_coff_file (const char *filename, const char *target,
   if (! bfd_set_format (abfd, bfd_object))
     bfd_fatal ("bfd_set_format");
 
-#if defined DLLTOOL_SH
-  if (! bfd_set_arch_mach (abfd, bfd_arch_sh, 0))
-    bfd_fatal ("bfd_set_arch_mach(sh)");
-#elif defined DLLTOOL_MIPS
-  if (! bfd_set_arch_mach (abfd, bfd_arch_mips, 0))
-    bfd_fatal ("bfd_set_arch_mach(mips)");
-#elif defined DLLTOOL_ARM
-  if (! bfd_set_arch_mach (abfd, bfd_arch_arm, 0))
-    bfd_fatal ("bfd_set_arch_mach(arm)");
-#else
   /* FIXME: This is obviously i386 specific.  */
   if (! bfd_set_arch_mach (abfd, bfd_arch_i386, 0))
-    bfd_fatal ("bfd_set_arch_mach(i386)");
-#endif
+    bfd_fatal ("bfd_set_arch_mach");
 
   if (! bfd_set_file_flags (abfd, HAS_SYMS | HAS_RELOC))
     bfd_fatal ("bfd_set_file_flags");
 
-  sec = bfd_make_section_with_flags (abfd, ".rsrc",
-				     (SEC_HAS_CONTENTS | SEC_ALLOC
-				      | SEC_LOAD | SEC_DATA));
+  sec = bfd_make_section (abfd, ".rsrc");
   if (sec == NULL)
     bfd_fatal ("bfd_make_section");
+
+  if (! bfd_set_section_flags (abfd, sec,
+			       (SEC_HAS_CONTENTS | SEC_ALLOC
+				| SEC_LOAD | SEC_DATA)))
+    bfd_fatal ("bfd_set_section_flags");
 
   if (! bfd_set_symtab (abfd, sec->symbol_ptr_ptr, 1))
     bfd_fatal ("bfd_set_symtab");
@@ -475,9 +477,8 @@ write_coff_file (const char *filename, const char *target,
 
      We build these different types of data in different lists.  */
 
-  set_windres_bfd (&wrbfd, abfd, sec, WR_KIND_BFD);
-
-  cwi.wrbfd = &wrbfd;
+  cwi.abfd = abfd;
+  cwi.big_endian = bfd_big_endian (abfd);
   cwi.sympp = sec->symbol_ptr_ptr;
   cwi.dirsize = 0;
   cwi.dirstrsize = 0;
@@ -512,7 +513,7 @@ write_coff_file (const char *filename, const char *target,
      alignment.  */
   if ((cwi.dirstrs.length & 3) != 0)
     {
-      bfd_byte *ex;
+      unsigned char *ex;
 
       ex = coff_alloc (&cwi.dirstrs, 2);
       ex[0] = 0;
@@ -544,18 +545,21 @@ write_coff_file (const char *filename, const char *target,
     }
   for (d = cwi.dirstrs.d; d != NULL; d = d->next)
     {
-      set_windres_bfd_content (&wrbfd, d->data, offset, d->length);
+      if (! bfd_set_section_contents (abfd, sec, d->data, offset, d->length))
+	bfd_fatal ("bfd_set_section_contents");
       offset += d->length;
     }
   for (d = cwi.dataents.d; d != NULL; d = d->next)
     {
-      set_windres_bfd_content (&wrbfd, d->data, offset, d->length);
+      if (! bfd_set_section_contents (abfd, sec, d->data, offset, d->length))
+	bfd_fatal ("bfd_set_section_contents");
       offset += d->length;
     }
-  for (rd = cwi.resources.d; rd != NULL; rd = rd->next)
+  for (d = cwi.resources.d; d != NULL; d = d->next)
     {
-      res_to_bin (cwi.wrbfd, (rc_uint_type) offset, rd->res);
-      offset += rd->length;
+      if (! bfd_set_section_contents (abfd, sec, d->data, offset, d->length))
+	bfd_fatal ("bfd_set_section_contents");
+      offset += d->length;
     }
 
   assert (offset == length);
@@ -571,10 +575,11 @@ write_coff_file (const char *filename, const char *target,
    entries.  This updates fields in CWI.  */
 
 static void
-coff_bin_sizes (const rc_res_directory *resdir,
-		struct coff_write_info *cwi)
+coff_bin_sizes (resdir, cwi)
+     const struct res_directory *resdir;
+     struct coff_write_info *cwi;
 {
-  const rc_res_entry *re;
+  const struct res_entry *re;
 
   cwi->dirsize += sizeof (struct extern_res_directory);
 
@@ -594,15 +599,17 @@ coff_bin_sizes (const rc_res_directory *resdir,
 
 /* Allocate data for a particular list.  */
 
-static bfd_byte *
-coff_alloc (struct bindata_build *bb, rc_uint_type size)
+static unsigned char *
+coff_alloc (bb, size)
+     struct bindata_build *bb;
+     size_t size;
 {
-  bindata *d;
+  struct bindata *d;
 
-  d = (bindata *) reswr_alloc (sizeof (bindata));
+  d = (struct bindata *) reswr_alloc (sizeof *d);
 
   d->next = NULL;
-  d->data = (bfd_byte *) reswr_alloc (size);
+  d->data = (unsigned char *) reswr_alloc (size);
   d->length = size;
 
   if (bb->d == NULL)
@@ -618,11 +625,13 @@ coff_alloc (struct bindata_build *bb, rc_uint_type size)
 /* Convert the resource directory RESDIR to binary.  */
 
 static void
-coff_to_bin (const rc_res_directory *resdir, struct coff_write_info *cwi)
+coff_to_bin (resdir, cwi)
+     const struct res_directory *resdir;
+     struct coff_write_info *cwi;
 {
   struct extern_res_directory *erd;
   int ci, cn;
-  const rc_res_entry *e;
+  const struct res_entry *e;
   struct extern_res_entry *ere;
 
   /* Write out the directory table.  */
@@ -630,10 +639,10 @@ coff_to_bin (const rc_res_directory *resdir, struct coff_write_info *cwi)
   erd = ((struct extern_res_directory *)
 	 coff_alloc (&cwi->dirs, sizeof (*erd)));
 
-  windres_put_32 (cwi->wrbfd, erd->characteristics, resdir->characteristics);
-  windres_put_32 (cwi->wrbfd, erd->time, resdir->time);
-  windres_put_16 (cwi->wrbfd, erd->major, resdir->major);
-  windres_put_16 (cwi->wrbfd, erd->minor, resdir->minor);
+  putcwi_32 (cwi, resdir->characteristics, erd->characteristics);
+  putcwi_32 (cwi, resdir->time, erd->time);
+  putcwi_16 (cwi, resdir->major, erd->major);
+  putcwi_16 (cwi, resdir->minor, erd->minor);
 
   ci = 0;
   cn = 0;
@@ -645,8 +654,8 @@ coff_to_bin (const rc_res_directory *resdir, struct coff_write_info *cwi)
 	++ci;
     }
 
-  windres_put_16 (cwi->wrbfd, erd->name_count, cn);
-  windres_put_16 (cwi->wrbfd, erd->id_count, ci);
+  putcwi_16 (cwi, cn, erd->name_count);
+  putcwi_16 (cwi, ci, erd->id_count);
 
   /* Write out the data entries.  Note that we allocate space for all
      the entries before writing them out.  That permits a recursive
@@ -657,33 +666,35 @@ coff_to_bin (const rc_res_directory *resdir, struct coff_write_info *cwi)
   for (e = resdir->entries; e != NULL; e = e->next, ere++)
     {
       if (! e->id.named)
-	windres_put_32 (cwi->wrbfd, ere->name, e->id.u.id);
+	putcwi_32 (cwi, e->id.u.id, ere->name);
       else
 	{
-	  bfd_byte *str;
-	  rc_uint_type i;
+	  unsigned char *str;
+	  int i;
 
 	  /* For some reason existing files seem to have the high bit
              set on the address of the name, although that is not
              documented.  */
-	  windres_put_32 (cwi->wrbfd, ere->name,
-		     0x80000000 | (cwi->dirsize + cwi->dirstrs.length));
+	  putcwi_32 (cwi,
+		     0x80000000 | (cwi->dirsize + cwi->dirstrs.length),
+		     ere->name);
 
 	  str = coff_alloc (&cwi->dirstrs, e->id.u.n.length * 2 + 2);
-	  windres_put_16 (cwi->wrbfd, str, e->id.u.n.length);
+	  putcwi_16 (cwi, e->id.u.n.length, str);
 	  for (i = 0; i < e->id.u.n.length; i++)
-	    windres_put_16 (cwi->wrbfd, str + (i + 1) * sizeof (unichar), e->id.u.n.name[i]);
+	    putcwi_16 (cwi, e->id.u.n.name[i], str + i * 2 + 2);
 	}
 
       if (e->subdir)
 	{
-	  windres_put_32 (cwi->wrbfd, ere->rva, 0x80000000 | cwi->dirs.length);
+	  putcwi_32 (cwi, 0x80000000 | cwi->dirs.length, ere->rva);
 	  coff_to_bin (e->u.dir, cwi);
 	}
       else
 	{
-	  windres_put_32 (cwi->wrbfd, ere->rva,
-		     cwi->dirsize + cwi->dirstrsize + cwi->dataents.length);
+	  putcwi_32 (cwi,
+		     cwi->dirsize + cwi->dirstrsize + cwi->dataents.length,
+		     ere->rva);
 
 	  coff_res_to_bin (e->u.res, cwi);
 	}
@@ -693,11 +704,14 @@ coff_to_bin (const rc_res_directory *resdir, struct coff_write_info *cwi)
 /* Convert the resource RES to binary.  */
 
 static void
-coff_res_to_bin (const rc_res_resource *res, struct coff_write_info *cwi)
+coff_res_to_bin (res, cwi)
+     const struct res_resource *res;
+     struct coff_write_info *cwi;
 {
   arelent *r;
   struct extern_res_data *erd;
-  coff_res_data *d;
+  struct bindata *d;
+  unsigned long length;
 
   /* For some reason, although every other address is a section
      offset, the address of the resource data itself is an RVA.  That
@@ -710,7 +724,7 @@ coff_res_to_bin (const rc_res_resource *res, struct coff_write_info *cwi)
   r->sym_ptr_ptr = cwi->sympp;
   r->address = cwi->dirsize + cwi->dirstrsize + cwi->dataents.length;
   r->addend = 0;
-  r->howto = bfd_reloc_type_lookup (WR_BFD (cwi->wrbfd), BFD_RELOC_RVA);
+  r->howto = bfd_reloc_type_lookup (cwi->abfd, BFD_RELOC_RVA);
   if (r->howto == NULL)
     bfd_fatal (_("can't get BFD_RELOC_RVA relocation type"));
 
@@ -722,29 +736,41 @@ coff_res_to_bin (const rc_res_resource *res, struct coff_write_info *cwi)
 
   erd = (struct extern_res_data *) coff_alloc (&cwi->dataents, sizeof (*erd));
 
-  windres_put_32 (cwi->wrbfd, erd->rva,
+  putcwi_32 (cwi,
 	     (cwi->dirsize
 	      + cwi->dirstrsize
 	      + cwi->dataentsize
-	      + cwi->resources.length));
-  windres_put_32 (cwi->wrbfd, erd->codepage, res->coff_info.codepage);
-  windres_put_32 (cwi->wrbfd, erd->reserved, res->coff_info.reserved);
+	      + cwi->resources.length),
+	     erd->rva);
+  putcwi_32 (cwi, res->coff_info.codepage, erd->codepage);
+  putcwi_32 (cwi, res->coff_info.reserved, erd->reserved);
 
-  d = (coff_res_data *) reswr_alloc (sizeof (coff_res_data));
-  d->length = res_to_bin (NULL, (rc_uint_type) 0, res);
-  d->res = res;
-  d->next = NULL;
+  d = res_to_bin (res, cwi->big_endian);
 
   if (cwi->resources.d == NULL)
     cwi->resources.d = d;
   else
     cwi->resources.last->next = d;
 
+  length = 0;
+  for (; d->next != NULL; d = d->next)
+    length += d->length;
+  length += d->length;
   cwi->resources.last = d;
-  cwi->resources.length += (d->length + 3) & ~3;
+  cwi->resources.length += length;
 
-  windres_put_32 (cwi->wrbfd, erd->size, d->length);
+  putcwi_32 (cwi, length, erd->size);
 
   /* Force the next resource to have 32 bit alignment.  */
-  d->length = (d->length + 3) & ~3;
+
+  if ((length & 3) != 0)
+    {
+      int add;
+      unsigned char *ex;
+
+      add = 4 - (length & 3);
+
+      ex = coff_alloc (&cwi->resources, add);
+      memset (ex, 0, add);
+    }
 }

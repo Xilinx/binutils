@@ -1,24 +1,12 @@
 ## Process this file with automake to generate Makefile.in
 
-AUTOMAKE_OPTIONS = 1.11 foreign no-dist no-texinfo.tex
-ACLOCAL_AMFLAGS = -I .. -I ../config -I ../bfd
-TEXINFO_TEX = $(top_srcdir)/../texinfo/texinfo.tex
+AUTOMAKE_OPTIONS = cygnus
 
 SUFFIXES = .m
 
 SUBDIRS = po
 
-BASEDIR = $(srcdir)/..
-BFDDIR = $(BASEDIR)/bfd
-INCDIR	= $(BASEDIR)/include
-
-WARN_CFLAGS = @WARN_CFLAGS@
-NO_WERROR = @NO_WERROR@
-AM_CFLAGS = $(WARN_CFLAGS)
-
-AM_CPPFLAGS = -DDEBUG -I../bfd -I$(srcdir)/../include \
-	-I$(srcdir)/../bfd @INCINTL@ -I. \
-	-DLOCALEDIR="\"$(datadir)/locale\""
+INCLUDES = -D_GNU_SOURCE -DDEBUG -I../bfd -I$(srcdir)/../include -I$(srcdir)/../bfd -I$(srcdir)/../intl -I../intl -DLOCALEDIR="\"$(prefix)/share/locale\""
 
 bin_PROGRAMS = gprof
 
@@ -26,23 +14,21 @@ bin_PROGRAMS = gprof
 sources = basic_blocks.c call_graph.c cg_arcs.c cg_dfn.c \
 	cg_print.c corefile.c gmon_io.c gprof.c hertz.c hist.c source.c \
 	search_list.c symtab.c sym_ids.c utils.c \
-	i386.c alpha.c vax.c tahoe.c sparc.c mips.c
+	i386.c alpha.c vax.c tahoe.c sparc.c
 gprof_SOURCES = $(sources) flat_bl.c bsd_callg_bl.c fsf_callg_bl.c
-gprof_DEPENDENCIES = ../bfd/libbfd.la ../libiberty/libiberty.a $(LIBINTL_DEP)
-gprof_LDADD = ../bfd/libbfd.la ../libiberty/libiberty.a $(LIBINTL)
+gprof_DEPENDENCIES = ../bfd/libbfd.la ../libiberty/libiberty.a $(INTLDEPS)
+gprof_LDADD = ../bfd/libbfd.la ../libiberty/libiberty.a $(INTLLIBS)
 
 noinst_HEADERS = \
 	basic_blocks.h call_graph.h cg_arcs.h cg_dfn.h cg_print.h \
 	corefile.h gmon.h gmon_io.h gmon_out.h gprof.h hertz.h hist.h \
 	search_list.h source.h sym_ids.h symtab.h utils.h
 
+EXTRA_DIST = flat_bl.c bsd_callg_bl.c fsf_callg_bl.c bbconv.pl
+
 BUILT_SOURCES = flat_bl.c bsd_callg_bl.c fsf_callg_bl.c
-EXTRA_DIST    = $(BUILT_SOURCES) bbconv.pl $(man_MANS)
 
-diststuff: $(BUILT_SOURCES) info $(man_MANS)
-
-# This empty rule is a hack against gmake patched by Apple.
-%.o:%.m
+diststuff: $(BUILT_SOURCES) info
 
 .m.c:
 	awk -f $(srcdir)/gen-c-prog.awk > ./$*.c \
@@ -51,42 +37,38 @@ diststuff: $(BUILT_SOURCES) info $(man_MANS)
 
 POTFILES = $(sources) $(noinst_HEADERS)
 po/POTFILES.in: @MAINT@ Makefile
-	for f in $(POTFILES); do echo $$f; done | LC_ALL=C sort > tmp \
+	for file in $(POTFILES); do echo $$file; done | sort > tmp \
 	  && mv tmp $(srcdir)/po/POTFILES.in
 
-MANCONF  = -Dman
-
-TEXI2POD = perl $(srcdir)/../etc/texi2pod.pl $(AM_MAKEINFOFLAGS)
-
-POD2MAN = pod2man --center="GNU" --release="binutils-$(VERSION)" --section=1
-
 info_TEXINFOS = gprof.texi
-gprof_TEXINFOS = config.texi
 man_MANS = gprof.1
 
-AM_MAKEINFOFLAGS = -I "$(srcdir)" -I "$(top_srcdir)/../bfd/doc" -I ../bfd/doc
-TEXI2DVI = texi2dvi -I "$(srcdir)" -I "$(top_srcdir)/../bfd/doc" -I ../bfd/doc
-
-config.texi:
-	echo "@set top_srcdir $(top_srcdir)" >> ./config.texi
-
-# Build the man page from the texinfo file
-# The sed command removes the no-adjust Nroff command so that
-# the man output looks standard.
-gprof.1: $(srcdir)/gprof.texi config.texi
-	touch $@
-	-$(TEXI2POD) $(MANCONF) -Dgprof < $(srcdir)/gprof.texi > gprof.pod
-	-($(POD2MAN) gprof.pod | \
-	       sed -e '/^.if n .na/d' > $@.T$$$$ && \
-	       mv -f $@.T$$$$ $@) || \
-	       (rm -f $@.T$$$$ && exit 1)
-	rm -f gprof.pod
-
-MAINTAINERCLEANFILES = gprof.info
-
-# Automake 1.9 will only build info files in the objdir if they are
-# mentioned in DISTCLEANFILES.  It doesn't have to be unconditional,
-# though, so we use a bogus condition.
-if GENINSRC_NEVER
-DISTCLEANFILES = gprof.info
-endif
+# Dependencies.
+$(OBJECTS): ../bfd/bfd.h call_graph.h cg_arcs.h cg_print.h \
+	corefile.h gmon_io.h gmon_out.h gprof.h hertz.h hist.h \
+	search_list.h source.h sym_ids.h symtab.h utils.h \
+	$(srcdir)/../include/libiberty.h $(srcdir)/../bfd/sysdep.h \
+	gconfig.h ../bfd/config.h
+basic_blocks.o: basic_blocks.c
+bsd_call_bl.o: bsd_call_bl.c
+call_graph.o: call_graph.c
+cg_arcs.o: cg_arcs.c
+cg_dfn.o: cg_dfn.c
+cg_print.o: cg_print.c
+corefile.o: corefile.c
+flat_bl.o: flat_bl.c
+fsf_callg_bl.o: fsf_callg_bl.c
+gmon_io.o: gmon_io.c
+gprof.o: gprof.c
+hertz.o: hertz.c
+hist.o: hist.c
+search_list.o: search_list.c
+source.o: source.c
+symtab.o: symtab.c
+sym_ids.o: sym_ids.c
+utils.o: utils.c
+i386.o: i386.c
+alpha.o: alpha.c
+vax.o: vax.c
+tahoe.o: tahoe.c
+sparc.o: sparc.c

@@ -1,10 +1,6 @@
 ARCH=mcore
 SCRIPT_NAME=mcorepe
-OUTPUT_FORMAT="pei-mcore-little"
+OUTPUT_FORMAT="pei-mcore-big"
 LITTLE_OUTPUT_FORMAT="pei-mcore-little"
 BIG_OUTPUT_FORMAT="pei-mcore-big"
 TEMPLATE_NAME=pe
-ENTRY="_mainCRTStartup"
-SUBSYSTEM=PE_DEF_SUBSYSTEM
-INITIAL_SYMBOL_CHAR=\"_\"
-TARGET_PAGE_SIZE=0x1000

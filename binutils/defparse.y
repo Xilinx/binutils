@@ -1,28 +1,25 @@
 %{ /* defparse.y - parser for .def files */
 
-/* Copyright 1995, 1997, 1998, 1999, 2001, 2004, 2005, 2007
-   Free Software Foundation, Inc.
-   
-   This file is part of GNU Binutils.
-   
-   This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
-   (at your option) any later version.
-   
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
-   
-   You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
-   MA 02110-1301, USA.  */
+/*   Copyright (C) 1995, 1997, 1998 Free Software Foundation, Inc.
 
-#include "sysdep.h"
+This file is part of GNU Binutils.
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
+
 #include "bfd.h"
-#include "libiberty.h"
+#include "bucomm.h"
 #include "dlltool.h"
 %}
 
@@ -31,13 +28,12 @@
   int number;
 };
 
-%token NAME LIBRARY DESCRIPTION STACKSIZE HEAPSIZE CODE DATA
-%token SECTIONS EXPORTS IMPORTS VERSIONK BASE CONSTANT
-%token READ WRITE EXECUTE SHARED NONSHARED NONAME PRIVATE
-%token SINGLE MULTIPLE INITINSTANCE INITGLOBAL TERMINSTANCE TERMGLOBAL
+%token NAME, LIBRARY, DESCRIPTION, STACKSIZE, HEAPSIZE, CODE, DATA
+%token SECTIONS, EXPORTS, IMPORTS, VERSIONK, BASE, CONSTANT
+%token READ WRITE EXECUTE SHARED NONAME
 %token <id> ID
 %token <number> NUMBER
-%type  <number> opt_base opt_ordinal opt_NONAME opt_CONSTANT opt_DATA opt_PRIVATE
+%type  <number> opt_base opt_ordinal opt_NONAME opt_CONSTANT opt_DATA
 %type  <number> attr attr_list opt_number
 %type  <id> opt_name opt_equal_name 
 
@@ -49,7 +45,7 @@ start: start command
 
 command: 
 		NAME opt_name opt_base { def_name ($2, $3); }
-	|	LIBRARY opt_name opt_base option_list { def_library ($2, $3); }
+	|	LIBRARY opt_name opt_base { def_library ($2, $3); }
 	|	EXPORTS explist 
 	|	DESCRIPTION ID { def_description ($2);}
 	|	STACKSIZE NUMBER opt_number { def_stacksize ($2, $3);}
@@ -65,12 +61,13 @@ command:
 
 explist:
 		/* EMPTY */
+	|	expline
 	|	explist expline
 	;
 
 expline:
-		ID opt_equal_name opt_ordinal opt_NONAME opt_CONSTANT opt_DATA opt_PRIVATE
-			{ def_exports ($1, $2, $3, $4, $5, $6, $7);}
+		ID opt_equal_name opt_ordinal opt_NONAME opt_CONSTANT opt_DATA
+			{ def_exports ($1, $2, $3, $4, $5, $6);}
 	;
 implist:	
 		implist impline
@@ -111,13 +108,10 @@ opt_number: ',' NUMBER { $$=$2;}
 	;
 	
 attr:
-		READ { $$ = 1; }
-	|	WRITE { $$ = 2; }
-	|	EXECUTE { $$ = 4; }
-	|	SHARED { $$ = 8; }
-	|	NONSHARED { $$ = 0; }
-	|	SINGLE { $$ = 0; }
-	|	MULTIPLE { $$ = 0; }
+		READ { $$ = 1;}
+	|	WRITE { $$ = 2;}	
+	|	EXECUTE { $$=4;}
+	|	SHARED { $$=8;}
 	;
 
 opt_CONSTANT:
@@ -133,11 +127,6 @@ opt_NONAME:
 opt_DATA:
 		DATA { $$ = 1; }
 	|	     { $$ = 0; }
-	;
-
-opt_PRIVATE:
-		PRIVATE { $$ = 1; }
-	|		{ $$ = 0; }
 	;
 
 opt_name: ID		{ $$ =$1; }
@@ -157,12 +146,6 @@ opt_ordinal:
 
 opt_equal_name:
           '=' ID	{ $$ = $2; }
-	| '=' ID '.' ID	
-	  { 
-	    char *name = xmalloc (strlen ($2) + 1 + strlen ($4) + 1);
-	    sprintf (name, "%s.%s", $2, $4);
-	    $$ = name;
-	  }
         | 		{ $$ =  0; }			 
 	;
 
@@ -170,14 +153,5 @@ opt_base: BASE	'=' NUMBER	{ $$= $3;}
 	|	{ $$=-1;}
 	;
 
-option_list:
-		/* empty */
-	|	option_list opt_comma option
-	;
+	
 
-option:
-		INITINSTANCE
-	|	INITGLOBAL
-	|	TERMINSTANCE
-	|	TERMGLOBAL
-	;

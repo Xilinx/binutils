@@ -1,9 +1,8 @@
-# Copyright (C) 1993, 1996, 1997, 1999, 2000, 2001, 2002, 2003, 2005, 2007, 2009
-# Free Software Foundation, Inc.
+# Copyright (C) 1993, 1996, 1997 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 3 of the License, or
+# the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
 # 
 # This program is distributed in the hope that it will be useful,
@@ -13,10 +12,10 @@
 # 
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston, MA 02110-1301, USA.  
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  
 
 # Please email any bugs, comments, and/or additions to this file to:
-# dejagnu@gnu.org
+# DejaGnu@cygnus.com
 
 # Written by the Center for Software Science at the University of Utah
 # and by Cygnus Support.
@@ -120,11 +119,8 @@ proc do_valid_align_tests {} {
 }
 
 if [istarget hppa*-*-*] then {
-    if { ![istarget hppa*-*-linux*] 
-	 && ![istarget hppa*-*-netbsd*] } {
-	# GAS-2.0 does not always parse ! as a line separator when it should.
-	setup_xfail hppa*-*-*
-    }
+    # GAS-2.0 does not always parse ! as a line separator when it should.
+    setup_xfail hppa*-*-*
     gas_test "linesepbug.s" "" "" "line separator bug"
 
     # Make sure GAS accepts syntax for accessing static data.
@@ -179,6 +175,8 @@ if [istarget hppa*-*-*] then {
     # Now check to make sure an invalid argument is flagged as an error.
     gas_test_error "align2.s" "" "Check for error on bogus argument to .align"
 
+    # GAS can't handle upper bound for a PA .block[z] directive
+    setup_xfail hppa*-*-*
     gas_test "block1.s" "" "" "Check min/max values for .block"
 
     # Now check for an invalid argument
@@ -190,7 +188,7 @@ if [istarget hppa*-*-*] then {
 
     # Bad things happen in the PA ELF backend (others too?) if a non-default
     # section is created...
-    setup_xfail "hppa*-*-*elf*" "hppa*-*-linux*" "hppa*64*-*-*"
+    setup_xfail hppa*-*-*elf*
     gas_test "ssbug.s" "" "" "Check for acceptance of non-default subspaces"
 
     # To be compatable with certain "features" of the HP compiler
@@ -202,7 +200,6 @@ if [istarget hppa*-*-*] then {
     gas_test "stdreg.s" "" "" "Test standard predefined registers"
 
     # Make sure GAS will accept a label without a colon.
-    setup_xfail "hppa*-*-linux*"
     gas_test "labelbug.s" "" "" "Test label without colon"
 
     # Make sure we grok # line directives.
@@ -221,8 +218,5 @@ if [istarget hppa*-*-*] then {
     # Check for bogus registers in single precision fmpyadd/fmpysub
     # instructions
     gas_test_error "badfmpyadd.s" "" "Check for error on bad fmpyadd insn"
-
-    # Make sure we grok spaces in directives.
-    gas_test "space.s" "" "" "Test acceptance of spaces in directives"
 }
 

@@ -1,12 +1,11 @@
 /* tc-fr30.c -- Assembler for the Fujitsu FR30.
-   Copyright 1998, 1999, 2000, 2001, 2002, 2003, 2005, 2006, 2007, 2009
-   Free Software Foundation, Inc.
+   Copyright (C) 1998, 1999 Free Software Foundation.
 
    This file is part of GAS, the GNU Assembler.
 
    GAS is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3, or (at your option)
+   the Free Software Foundation; either version 2, or (at your option)
    any later version.
 
    GAS is distributed in the hope that it will be useful,
@@ -16,12 +15,13 @@
 
    You should have received a copy of the GNU General Public License
    along with GAS; see the file COPYING.  If not, write to
-   the Free Software Foundation, 51 Franklin Street - Fifth Floor,
-   Boston, MA 02110-1301, USA.  */
+   the Free Software Foundation, 59 Temple Place - Suite 330,
+   Boston, MA 02111-1307, USA.  */
 
+#include <stdio.h>
+#include <ctype.h>
 #include "as.h"
-#include "safe-ctype.h"
-#include "subsegs.h"
+#include "subsegs.h"     
 #include "symcat.h"
 #include "opcodes/fr30-desc.h"
 #include "opcodes/fr30-opc.h"
@@ -65,8 +65,9 @@ struct option md_longopts[] =
 size_t md_longopts_size = sizeof (md_longopts);
 
 int
-md_parse_option (int c ATTRIBUTE_UNUSED,
-		 char *arg ATTRIBUTE_UNUSED)
+md_parse_option (c, arg)
+     int    c;
+     char * arg;
 {
   switch (c)
     {
@@ -77,10 +78,11 @@ md_parse_option (int c ATTRIBUTE_UNUSED,
 }
 
 void
-md_show_usage (FILE * stream)
+md_show_usage (stream)
+  FILE * stream;
 {
   fprintf (stream, _(" FR30 specific command line options:\n"));
-}
+} 
 
 /* The target specific pseudo-ops which we support.  */
 const pseudo_typeS md_pseudo_table[] =
@@ -91,10 +93,14 @@ const pseudo_typeS md_pseudo_table[] =
 
 
 void
-md_begin (void)
+md_begin ()
 {
-  /* Initialize the `cgen' interface.  */
+  flagword applicable;
+  segT     seg;
+  subsegT  subseg;
 
+  /* Initialize the `cgen' interface.  */
+  
   /* Set the machine number and endian.  */
   gas_cgen_cpu_desc = fr30_cgen_cpu_open (CGEN_CPU_OPEN_MACHS, 0,
 					  CGEN_CPU_OPEN_ENDIAN,
@@ -107,21 +113,23 @@ md_begin (void)
 }
 
 void
-md_assemble (char *str)
+md_assemble (str)
+     char * str;
 {
   static int last_insn_had_delay_slot = 0;
   fr30_insn insn;
-  char *errmsg;
+  char *    errmsg;
+  char *    str2 = NULL;
 
   /* Initialize GAS's cgen interface for a new instruction.  */
   gas_cgen_init_parse ();
 
   insn.insn = fr30_cgen_assemble_insn
     (gas_cgen_cpu_desc, str, & insn.fields, insn.buffer, & errmsg);
-
+  
   if (!insn.insn)
     {
-      as_bad ("%s", errmsg);
+      as_bad (errmsg);
       return;
     }
 
@@ -142,8 +150,9 @@ md_assemble (char *str)
 /* The syntax in the manual says constants begin with '#'.
    We just ignore it.  */
 
-void
-md_operand (expressionS * expressionP)
+void 
+md_operand (expressionP)
+     expressionS * expressionP;
 {
   if (* input_line_pointer == '#')
     {
@@ -153,17 +162,19 @@ md_operand (expressionS * expressionP)
 }
 
 valueT
-md_section_align (segT segment, valueT size)
+md_section_align (segment, size)
+     segT   segment;
+     valueT size;
 {
   int align = bfd_get_section_alignment (stdoutput, segment);
-
   return ((size + (1 << align) - 1) & (-1 << align));
 }
 
 symbolS *
-md_undefined_symbol (char *name ATTRIBUTE_UNUSED)
+md_undefined_symbol (name)
+  char * name;
 {
-  return NULL;
+  return 0;
 }
 
 /* Interface to relax_segment.  */
@@ -196,6 +207,47 @@ const relax_typeS md_relax_table[] =
   {0x2000000 - 1 - 2, -0x2000000 - 2, 4, 0 }
 };
 
+long
+fr30_relax_frag (fragP, stretch)
+     fragS * fragP;
+     long    stretch;
+{
+  /* Address of branch insn.  */
+  long address = fragP->fr_address + fragP->fr_fix - 2;
+  long growth = 0;
+
+  /* Keep 32 bit insns aligned on 32 bit boundaries.  */
+  if (fragP->fr_subtype == 2)
+    {
+      if ((address & 3) != 0)
+	{
+	  fragP->fr_subtype = 3;
+	  growth = 2;
+	}
+    }
+  else if (fragP->fr_subtype == 3)
+    {
+      if ((address & 3) == 0)
+	{
+	  fragP->fr_subtype = 2;
+	  growth = -2;
+	}
+    }
+  else
+    {
+      growth = relax_frag (fragP, stretch);
+
+      /* Long jump on odd halfword boundary?  */
+      if (fragP->fr_subtype == 2 && (address & 3) != 0)
+	{
+	  fragP->fr_subtype = 3;
+	  growth += 2;
+	}
+    }
+
+  return growth;
+}
+
 /* Return an initial guess of the length by which a fragment must grow to
    hold a branch to reach its destination.
    Also updates fr_type/fr_subtype as necessary.
@@ -208,8 +260,12 @@ const relax_typeS md_relax_table[] =
    0 value.  */
 
 int
-md_estimate_size_before_relax (fragS * fragP, segT segment)
+md_estimate_size_before_relax (fragP, segment)
+     fragS * fragP;
+     segT    segment;
 {
+  int    old_fr_fix = fragP->fr_fix;
+
   /* The only thing we have to handle here are symbols outside of the
      current segment.  They may be undefined or in a different segment in
      which case linker scripts may place them anywhere.
@@ -223,6 +279,24 @@ md_estimate_size_before_relax (fragS * fragP, segT segment)
 	 all further handling to md_convert_frag.  */
       fragP->fr_subtype = 2;
 
+#if 0 /* Can't use this, but leave in for illustration.  */     
+      /* Change 16 bit insn to 32 bit insn.  */
+      fragP->fr_opcode[0] |= 0x80;
+
+      /* Increase known (fixed) size of fragment.  */
+      fragP->fr_fix += 2;
+
+      /* Create a relocation for it.  */
+      fix_new (fragP, old_fr_fix, 4,
+	       fragP->fr_symbol,
+	       fragP->fr_offset, 1 /* pcrel */,
+	       /* FIXME: Can't use a real BFD reloc here.
+		  gas_cgen_md_apply_fix3 can't handle it.  */
+	       BFD_RELOC_FR30_26_PCREL);
+
+      /* Mark this fragment as finished.  */
+      frag_wane (fragP);
+#else
       {
 	const CGEN_INSN * insn;
 	int               i;
@@ -236,7 +310,7 @@ md_estimate_size_before_relax (fragS * fragP, segT segment)
 	    if ((strcmp (CGEN_INSN_MNEMONIC (insn),
 			 CGEN_INSN_MNEMONIC (fragP->fr_cgen.insn))
 		 == 0)
-		&& CGEN_INSN_ATTR_VALUE (insn, CGEN_INSN_RELAXED))
+		&& CGEN_INSN_ATTR_VALUE (insn, CGEN_INSN_RELAX))
 	      break;
 	  }
 	if (i == 4)
@@ -245,11 +319,11 @@ md_estimate_size_before_relax (fragS * fragP, segT segment)
 	fragP->fr_cgen.insn = insn;
 	return 2;
       }
+#endif
     }
 
-  /* Return the size of the variable part of the frag.  */
-  return md_relax_table[fragP->fr_subtype].rlx_length;
-}
+  return (fragP->fr_var + fragP->fr_fix - old_fr_fix);
+} 
 
 /* *fragP has been relaxed to its final size, and now needs to have
    the bytes inside it modified to conform to the new size.
@@ -259,10 +333,90 @@ md_estimate_size_before_relax (fragS * fragP, segT segment)
    fragP->fr_subtype is the subtype of what the address relaxed to.  */
 
 void
-md_convert_frag (bfd *abfd ATTRIBUTE_UNUSED,
-		 segT sec ATTRIBUTE_UNUSED,
-		 fragS *fragP ATTRIBUTE_UNUSED)
+md_convert_frag (abfd, sec, fragP)
+  bfd *   abfd;
+  segT    sec;
+  fragS * fragP;
 {
+#if 0
+  char * opcode;
+  char * displacement;
+  int    target_address;
+  int    opcode_address;
+  int    extension;
+  int    addend;
+
+  opcode = fragP->fr_opcode;
+
+  /* Address opcode resides at in file space.  */
+  opcode_address = fragP->fr_address + fragP->fr_fix - 2;
+
+  switch (fragP->fr_subtype)
+    {
+    case 1 :
+      extension = 0;
+      displacement = & opcode[1];
+      break;
+    case 2 :
+      opcode[0] |= 0x80;
+      extension = 2;
+      displacement = & opcode[1];
+      break;
+    case 3 :
+      opcode[2] = opcode[0] | 0x80;
+      md_number_to_chars (opcode, PAR_NOP_INSN, 2);
+      opcode_address += 2;
+      extension = 4;
+      displacement = & opcode[3];
+      break;
+    default :
+      abort ();
+    }
+
+  if (S_GET_SEGMENT (fragP->fr_symbol) != sec)
+    {
+      /* symbol must be resolved by linker */
+      if (fragP->fr_offset & 3)
+	as_warn (_("Addend to unresolved symbol not on word boundary."));
+      addend = fragP->fr_offset >> 2;
+    }
+  else
+    {
+      /* Address we want to reach in file space.  */
+      target_address = S_GET_VALUE (fragP->fr_symbol) + fragP->fr_offset;
+      target_address += fragP->fr_symbol->sy_frag->fr_address;
+      addend = (target_address - (opcode_address & -4)) >> 2;
+    }
+
+  /* Create a relocation for symbols that must be resolved by the linker.
+     Otherwise output the completed insn.  */
+
+  if (S_GET_SEGMENT (fragP->fr_symbol) != sec)
+    {
+      assert (fragP->fr_subtype != 1);
+      assert (fragP->fr_cgen.insn != 0);
+      gas_cgen_record_fixup (fragP,
+			     /* Offset of branch insn in frag.  */
+			     fragP->fr_fix + extension - 4,
+			     fragP->fr_cgen.insn,
+			     4 /*length*/,
+			     /* FIXME: quick hack */
+#if 0
+			     CGEN_OPERAND_ENTRY (fragP->fr_cgen.opindex),
+#else
+			     CGEN_OPERAND_ENTRY (FR30_OPERAND_DISP24),
+#endif
+			     fragP->fr_cgen.opinfo,
+			     fragP->fr_symbol, fragP->fr_offset);
+    }
+
+#define SIZE_FROM_RELAX_STATE(n) ((n) == 1 ? 1 : 3)
+
+  md_number_to_chars (displacement, (valueT) addend,
+		      SIZE_FROM_RELAX_STATE (fragP->fr_subtype));
+
+  fragP->fr_fix += extension;
+#endif
 }
 
 /* Functions concerning relocs.  */
@@ -271,14 +425,18 @@ md_convert_frag (bfd *abfd ATTRIBUTE_UNUSED,
    given a PC relative reloc.  */
 
 long
-md_pcrel_from_section (fixS * fixP, segT sec)
+md_pcrel_from_section (fixP, sec)
+     fixS * fixP;
+     segT   sec;
 {
   if (fixP->fx_addsy != (symbolS *) NULL
       && (! S_IS_DEFINED (fixP->fx_addsy)
 	  || S_GET_SEGMENT (fixP->fx_addsy) != sec))
-    /* The symbol is undefined (or is defined but not in this section).
-       Let the linker figure it out.  */
-    return 0;
+    {
+      /* The symbol is undefined (or is defined but not in this section).
+	 Let the linker figure it out.  */
+      return 0;
+    }
 
   return (fixP->fx_frag->fr_address + fixP->fx_where) & ~1;
 }
@@ -288,9 +446,10 @@ md_pcrel_from_section (fixS * fixP, segT sec)
    *FIXP may be modified if desired.  */
 
 bfd_reloc_code_real_type
-md_cgen_lookup_reloc (const CGEN_INSN *insn ATTRIBUTE_UNUSED,
-		      const CGEN_OPERAND *operand,
-		      fixS *fixP)
+md_cgen_lookup_reloc (insn, operand, fixP)
+     const CGEN_INSN *    insn;
+     const CGEN_OPERAND * operand;
+     fixS *               fixP;
 {
   switch (operand->type)
     {
@@ -303,40 +462,111 @@ md_cgen_lookup_reloc (const CGEN_INSN *insn ATTRIBUTE_UNUSED,
     case FR30_OPERAND_I8:      return BFD_RELOC_8;
     case FR30_OPERAND_I32:     return BFD_RELOC_FR30_48;
     case FR30_OPERAND_I20:     return BFD_RELOC_FR30_20;
-    default : /* Avoid -Wall warning.  */
+    default : /* avoid -Wall warning */
       break;
     }
 
   return BFD_RELOC_NONE;
 }
+
+/* See whether we need to force a relocation into the output file.
+   This is used to force out switch and PC relative relocations when
+   relaxing.  */
+
+int
+fr30_force_relocation (fix)
+     fixS * fix;
+{
+  if (   fix->fx_r_type == BFD_RELOC_VTABLE_INHERIT
+      || fix->fx_r_type == BFD_RELOC_VTABLE_ENTRY)
+    return 1;
+
+  return 0;
+}
 
 /* Write a value out to the object file, using the appropriate endianness.  */
 
 void
-md_number_to_chars (char * buf, valueT val, int n)
+md_number_to_chars (buf, val, n)
+     char * buf;
+     valueT val;
+     int    n;
 {
   number_to_chars_bigendian (buf, val, n);
 }
 
+/* Turn a string in input_line_pointer into a floating point constant of type
+   type, and store the appropriate bytes in *litP.  The number of LITTLENUMS
+   emitted is stored in *sizeP .  An error message is returned, or NULL on OK.
+*/
+
+/* Equal to MAX_PRECISION in atof-ieee.c */
+#define MAX_LITTLENUMS 6
+
 char *
-md_atof (int type, char * litP, int * sizeP)
+md_atof (type, litP, sizeP)
+     char   type;
+     char * litP;
+     int *  sizeP;
 {
-  return ieee_md_atof (type, litP, sizeP, TRUE);
+  int              i;
+  int              prec;
+  LITTLENUM_TYPE   words [MAX_LITTLENUMS];
+  char *           t;
+  char *           atof_ieee ();
+
+  switch (type)
+    {
+    case 'f':
+    case 'F':
+    case 's':
+    case 'S':
+      prec = 2;
+      break;
+
+    case 'd':
+    case 'D':
+    case 'r':
+    case 'R':
+      prec = 4;
+      break;
+
+   /* FIXME: Some targets allow other format chars for bigger sizes here.  */
+
+    default:
+      * sizeP = 0;
+      return _("Bad call to md_atof()");
+    }
+
+  t = atof_ieee (input_line_pointer, type, words);
+  if (t)
+    input_line_pointer = t;
+  * sizeP = prec * sizeof (LITTLENUM_TYPE);
+
+  for (i = 0; i < prec; i++)
+    {
+      md_number_to_chars (litP, (valueT) words[i],
+			  sizeof (LITTLENUM_TYPE));
+      litP += sizeof (LITTLENUM_TYPE);
+    }
+     
+  return 0;
 }
 
 /* Worker function for fr30_is_colon_insn().  */
 static char
-restore_colon (int advance_i_l_p_by)
+restore_colon (advance_i_l_p_by)
+     int advance_i_l_p_by;
 {
   char c;
-
+  
   /* Restore the colon, and advance input_line_pointer to
      the end of the new symbol.  */
   * input_line_pointer = ':';
   input_line_pointer += advance_i_l_p_by;
   c = * input_line_pointer;
   * input_line_pointer = 0;
-
+  
   return c;
 }
 
@@ -348,11 +578,12 @@ restore_colon (int advance_i_l_p_by)
    to the real end of the instruction/symbol, and returns the character
    that really terminated the symbol.  Otherwise it returns 0.  */
 char
-fr30_is_colon_insn (char *  start)
+fr30_is_colon_insn (start)
+     char *  start;
 {
   char * i_l_p = input_line_pointer;
 
-  /* Check to see if the symbol parsed so far is 'ldi'.  */
+  /* Check to see if the symbol parsed so far is 'ldi'  */
   if (   (start[0] != 'l' && start[0] != 'L')
       || (start[1] != 'd' && start[1] != 'D')
       || (start[2] != 'i' && start[2] != 'I')
@@ -379,11 +610,11 @@ fr30_is_colon_insn (char *  start)
 
 	      if (start [len] != 0)
 		continue;
-
+	      
 	      while (len --)
-		if (TOLOWER (start [len]) != insn [len])
+		if (tolower (start [len]) != insn [len])
 		  break;
-
+	      
 	      if (len == -1)
 		return restore_colon (1);
 	    }
@@ -393,26 +624,39 @@ fr30_is_colon_insn (char *  start)
       return 0;
     }
 
-  /* Check to see if the text following the colon is '8'.  */
+  /* Check to see if the text following the colon is '8' */
   if (i_l_p[1] == '8' && (i_l_p[2] == ' ' || i_l_p[2] == '\t'))
     return restore_colon (2);
 
-  /* Check to see if the text following the colon is '20'.  */
+  /* Check to see if the text following the colon is '20' */
   else if (i_l_p[1] == '2' && i_l_p[2] =='0' && (i_l_p[3] == ' ' || i_l_p[3] == '\t'))
     return restore_colon (3);
 
-  /* Check to see if the text following the colon is '32'.  */
+  /* Check to see if the text following the colon is '32' */
   else if (i_l_p[1] == '3' && i_l_p[2] =='2' && (i_l_p[3] == ' ' || i_l_p[3] == '\t'))
     return restore_colon (3);
 
   return 0;
 }
 
-bfd_boolean
-fr30_fix_adjustable (fixS * fixP)
+boolean
+fr30_fix_adjustable (fixP)
+   fixS * fixP;
 {
-  /* We need the symbol name for the VTABLE entries.  */
-  if (fixP->fx_r_type == BFD_RELOC_VTABLE_INHERIT
+  if (fixP->fx_addsy == NULL)
+    return 1;
+  
+#if 0  
+  /* Prevent all adjustments to global symbols. */
+  if (S_IS_EXTERN (fixP->fx_addsy))
+    return 0;
+  
+  if (S_IS_WEAK (fixP->fx_addsy))
+    return 0;
+#endif
+  
+  /* We need the symbol name for the VTABLE entries */
+  if (   fixP->fx_r_type == BFD_RELOC_VTABLE_INHERIT
       || fixP->fx_r_type == BFD_RELOC_VTABLE_ENTRY)
     return 0;
 

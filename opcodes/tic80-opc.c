@@ -1,25 +1,25 @@
 /* Opcode table for TI TMS320C80 (MVP).
-   Copyright 1996, 1997, 2000, 2005, 2007 Free Software Foundation, Inc.
+   Copyright 1996, 1999 Free Software Foundation, Inc.
 
-   This file is part of the GNU opcodes library.
+This file is part of GDB, GAS, and the GNU binutils.
 
-   This library is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3, or (at your option)
-   any later version.
+GDB, GAS, and the GNU binutils are free software; you can redistribute
+them and/or modify them under the terms of the GNU General Public
+License as published by the Free Software Foundation; either version
+1, or (at your option) any later version.
 
-   It is distributed in the hope that it will be useful, but WITHOUT
-   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
-   or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
-   License for more details.
+GDB, GAS, and the GNU binutils are distributed in the hope that they
+will be useful, but WITHOUT ANY WARRANTY; without even the implied
+warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See
+the GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License
-   along with this file; see the file COPYING.  If not, write to the
-   Free Software Foundation, 51 Franklin Street - Fifth Floor, Boston,
-   MA 02110-1301, USA.  */
+You should have received a copy of the GNU General Public License
+along with this file; see the file COPYING.  If not, write to the Free
+Software Foundation, 59 Temple Place - Suite 330, Boston, MA
+02111-1307, USA.  */
 
 #include <stdio.h>
-#include "sysdep.h"
+#include "ansidecl.h"
 #include "opcode/tic80.h"
 
 /* This file holds various tables for the TMS320C80 (MVP).
@@ -219,7 +219,7 @@ const int tic80_num_predefined_symbols = sizeof (tic80_predefined_symbols) / siz
    in CLASS, and translates it to a numeric value, which it returns.
 
    If CLASS is zero, any symbol that matches NAME is translated.  If
-   CLASS is non-zero, then only a symbol that has symbol_class CLASS is
+   CLASS is non-zero, then only a symbol that has class CLASS is
    matched.
 
    If no translation is possible, it returns -1, a value not used by
@@ -233,9 +233,9 @@ const int tic80_num_predefined_symbols = sizeof (tic80_predefined_symbols) / siz
  */
 
 int
-tic80_symbol_to_value (name, symbol_class)
+tic80_symbol_to_value (name, class)
      char *name;
-     int symbol_class;
+     int class;
 {
   const struct predefined_symbol *pdsp;
   int low = 0;
@@ -259,7 +259,7 @@ tic80_symbol_to_value (name, symbol_class)
       else 
 	{
 	  pdsp = &tic80_predefined_symbols[middle];
-	  if ((symbol_class == 0) || (symbol_class & PDS_VALUE (pdsp)))
+	  if ((class == 0) || (class & PDS_VALUE (pdsp)))
 	    {
 	      rtnval = PDS_VALUE (pdsp);
 	    }
@@ -271,13 +271,13 @@ tic80_symbol_to_value (name, symbol_class)
 }
 
 /* This function takes a value VAL and finds a matching predefined
-   symbol that is in the operand symbol_class specified by CLASS.  If CLASS
+   symbol that is in the operand class specified by CLASS.  If CLASS
    is zero, the first matching symbol is returned. */
 
 const char *
-tic80_value_to_symbol (val, symbol_class)
+tic80_value_to_symbol (val, class)
      int val;
-     int symbol_class;
+     int class;
 {
   const struct predefined_symbol *pdsp;
   int ival;
@@ -291,7 +291,7 @@ tic80_value_to_symbol (val, symbol_class)
       ival = PDS_VALUE (pdsp) & ~TIC80_OPERAND_MASK;
       if (ival == val)
 	{
-	  if ((symbol_class == 0) || (symbol_class & PDS_VALUE (pdsp)))
+	  if ((class == 0) || (class & PDS_VALUE (pdsp)))
 	    {
 	      /* Found the desired match */
 	      name = PDS_NAME (pdsp);

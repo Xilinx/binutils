@@ -1,38 +1,24 @@
 /*
- * Copyright (c) 1983, 1993, 1998, 2001, 2002
- *      The Regents of the University of California.  All rights reserved.
+ * Copyright (c) 1983, 1998 Regents of the University of California.
+ * All rights reserved.
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in the
- *    documentation and/or other materials provided with the distribution.
- * 3. Neither the name of the University nor the names of its contributors
- *    may be used to endorse or promote products derived from this software
- *    without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
- * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
- * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
- * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
- * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
- * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
- * SUCH DAMAGE.
+ * Redistribution and use in source and binary forms are permitted
+ * provided that: (1) source distributions retain this entire copyright
+ * notice and comment, and (2) distributions including binaries display
+ * the following acknowledgement:  ``This product includes software
+ * developed by the University of California, Berkeley and its contributors''
+ * in the documentation or other materials provided with the distribution
+ * and in all advertising materials mentioning features or use of this
+ * software. Neither the name of the University nor the names of its
+ * contributors may be used to endorse or promote products derived
+ * from this software without specific prior written permission.
+ * THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
-
-#include "gprof.h"
+#include "getopt.h"
 #include "libiberty.h"
-#include "bfdver.h"
-#include "search_list.h"
-#include "source.h"
-#include "symtab.h"
+#include "gprof.h"
 #include "basic_blocks.h"
 #include "call_graph.h"
 #include "cg_arcs.h"
@@ -41,16 +27,12 @@
 #include "gmon_io.h"
 #include "hertz.h"
 #include "hist.h"
+#include "source.h"
 #include "sym_ids.h"
-#include "demangle.h"
-#include "getopt.h"
 
-static void usage (FILE *, int) ATTRIBUTE_NORETURN;
-
-const char * whoami;
-const char * function_mapping_file;
-static const char * external_symbol_table;
-const char * a_out_name = A_OUTNAME;
+const char *whoami;
+const char *function_mapping_file;
+const char *a_out_name = A_OUTNAME;
 long hz = HZ_WRONG;
 
 /*
@@ -59,24 +41,27 @@ long hz = HZ_WRONG;
 int debug_level = 0;
 int output_style = 0;
 int output_width = 80;
-bfd_boolean bsd_style_output = FALSE;
-bfd_boolean demangle = TRUE;
-bfd_boolean ignore_direct_calls = FALSE;
-bfd_boolean ignore_static_funcs = FALSE;
-bfd_boolean ignore_zeros = TRUE;
-bfd_boolean line_granularity = FALSE;
-bfd_boolean print_descriptions = TRUE;
-bfd_boolean print_path = FALSE;
-bfd_boolean ignore_non_functions = FALSE;
+bool bsd_style_output = FALSE;
+bool demangle = TRUE;
+bool discard_underscores = TRUE;
+bool ignore_direct_calls = FALSE;
+bool ignore_static_funcs = FALSE;
+bool ignore_zeros = TRUE;
+bool line_granularity = FALSE;
+bool print_descriptions = TRUE;
+bool print_path = FALSE;
+bool ignore_non_functions = FALSE;
 File_Format file_format = FF_AUTO;
 
-bfd_boolean first_output = TRUE;
+bool first_output = TRUE;
 
 char copyright[] =
- "@(#) Copyright (c) 1983 Regents of the University of California.\n\
- All rights reserved.\n";
+ N_("@(#) Copyright (c) 1983 Regents of the University of California.\n\
+ All rights reserved.\n");
 
 static char *gmon_name = GMONNAME;	/* profile filename */
+
+bfd *abfd;
 
 /*
  * Functions that get excluded by default:
@@ -85,6 +70,7 @@ static char *default_excluded_list[] =
 {
   "_gprof_mcount", "mcount", "_mcount", "__mcount", "__mcount_internal",
   "__mcleanup",
+  "<locore>", "<hicore>",
   0
 };
 
@@ -99,7 +85,6 @@ static struct option long_options[] =
   {"line", no_argument, 0, 'l'},
   {"no-static", no_argument, 0, 'a'},
   {"ignore-non-functions", no_argument, 0, 'D'},
-  {"external-symbol-table", required_argument, 0, 'S'},
 
     /* output styles: */
 
@@ -119,7 +104,7 @@ static struct option long_options[] =
     /* various options to affect output: */
 
   {"all-lines", no_argument, 0, 'x'},
-  {"demangle", optional_argument, 0, OPTION_DEMANGLE},
+  {"demangle", no_argument, 0, OPTION_DEMANGLE},
   {"no-demangle", no_argument, 0, OPTION_NO_DEMANGLE},
   {"directory-path", required_argument, 0, 'I'},
   {"display-unused-functions", no_argument, 0, 'z'},
@@ -154,10 +139,10 @@ static struct option long_options[] =
 
 
 static void
-usage (FILE *stream, int status)
+DEFUN (usage, (stream, status), FILE * stream AND int status)
 {
   fprintf (stream, _("\
-Usage: %s [-[abcDhilLsTvwxyz]] [-[ACeEfFJnNOpPqSQZ][name]] [-I dirs]\n\
+Usage: %s [-[abcDhilLsTvwxyz]] [-[ACeEfFJnNOpPqQZ][name]] [-I dirs]\n\
 	[-d[num]] [-k from/to] [-m min-count] [-t table-length]\n\
 	[--[no-]annotated-source[=name]] [--[no-]exec-counts[=name]]\n\
 	[--[no-]flat-profile[=name]] [--[no-]graph[=name]]\n\
@@ -168,17 +153,17 @@ Usage: %s [-[abcDhilLsTvwxyz]] [-[ACeEfFJnNOpPqSQZ][name]] [-I dirs]\n\
 	[--no-static] [--print-path] [--separate-files]\n\
 	[--static-call-graph] [--sum] [--table-length=len] [--traditional]\n\
 	[--version] [--width=n] [--ignore-non-functions]\n\
-	[--demangle[=STYLE]] [--no-demangle] [--external-symbol-table=name] [@FILE]\n\
+	[--demangle] [--no-demangle]\n\
 	[image-file] [profile-file...]\n"),
 	   whoami);
-  if (REPORT_BUGS_TO[0] && status == 0)
-    fprintf (stream, _("Report bugs to %s\n"), REPORT_BUGS_TO);
+  if (status == 0)
+    fprintf (stream, _("Report bugs to bug-gnu-utils@gnu.org\n"));
   done (status);
 }
 
 
 int
-main (int argc, char **argv)
+DEFUN (main, (argc, argv), int argc AND char **argv)
 {
   char **sp, *str;
   Sym **cg = 0;
@@ -187,21 +172,14 @@ main (int argc, char **argv)
 #if defined (HAVE_SETLOCALE) && defined (HAVE_LC_MESSAGES)
   setlocale (LC_MESSAGES, "");
 #endif
-#if defined (HAVE_SETLOCALE)
-  setlocale (LC_CTYPE, "");
-#endif
-#ifdef ENABLE_NLS
   bindtextdomain (PACKAGE, LOCALEDIR);
   textdomain (PACKAGE);
-#endif
 
   whoami = argv[0];
   xmalloc_set_program_name (whoami);
 
-  expandargv (&argc, &argv);
-
   while ((ch = getopt_long (argc, argv,
-	"aA::bBcC::d::De:E:f:F:hiI:J::k:lLm:n:N:O:p::P::q::Q::rR:sS:t:Tvw:xyzZ::",
+	"aA::bBcCdD::e:E:f:F:hiI:J::k:lLm:n::N::O:p::P::q::Q::st:Tvw:xyzZ::",
 			    long_options, 0))
 	 != EOF)
     {
@@ -400,10 +378,6 @@ main (int argc, char **argv)
 	  output_style |= STYLE_SUMMARY_FILE;
 	  user_specified |= STYLE_SUMMARY_FILE;
 	  break;
-	case 'S':
-	  external_symbol_table = optarg;
-	  DBG (AOUTDEBUG, printf ("external-symbol-table: %s\n", optarg));
-	  break;
 	case 't':
 	  bb_table_length = atoi (optarg);
 	  if (bb_table_length < 0)
@@ -416,7 +390,7 @@ main (int argc, char **argv)
 	  break;
 	case 'v':
 	  /* This output is intended to follow the GNU standards document.  */
-	  printf (_("GNU gprof %s\n"), BFD_VERSION_STRING);
+	  printf (_("GNU gprof %s\n"), VERSION);
 	  printf (_("Based on BSD gprof, copyright 1983 Regents of the University of California.\n"));
 	  printf (_("\
 This program is free software.  This program has absolutely no warranty.\n"));
@@ -451,21 +425,6 @@ This program is free software.  This program has absolutely no warranty.\n"));
 	  break;
 	case OPTION_DEMANGLE:
 	  demangle = TRUE;
-	  if (optarg != NULL)
-	    {
-	      enum demangling_styles style;
-
-	      style = cplus_demangle_name_to_style (optarg);
-	      if (style == unknown_demangling)
-		{
-		  fprintf (stderr,
-			   _("%s: unknown demangling style `%s'\n"),
-			   whoami, optarg);
-		  xexit (1);
-		}
-
-	      cplus_demangle_set_style (style);
-	   }
 	  break;
 	case OPTION_NO_DEMANGLE:
 	  demangle = FALSE;
@@ -485,87 +444,141 @@ This program is free software.  This program has absolutely no warranty.\n"));
       done (1);
     }
 
-  /* --sum implies --line, otherwise we'd lose basic block counts in
-       gmon.sum */
+  /* --sum implies --line, otherwise we'd lose b-b counts in gmon.sum */
   if (output_style & STYLE_SUMMARY_FILE)
-    line_granularity = 1;
+    {
+      line_granularity = 1;
+    }
 
   /* append value of GPROF_PATH to source search list if set: */
   str = (char *) getenv ("GPROF_PATH");
   if (str)
-    search_list_append (&src_search_list, str);
+    {
+      search_list_append (&src_search_list, str);
+    }
 
   if (optind < argc)
-    a_out_name = argv[optind++];
-
+    {
+      a_out_name = argv[optind++];
+    }
   if (optind < argc)
-    gmon_name = argv[optind++];
+    {
+      gmon_name = argv[optind++];
+    }
 
-  /* Turn off default functions.  */
+  /*
+   * Turn off default functions:
+   */
   for (sp = &default_excluded_list[0]; *sp; sp++)
     {
       sym_id_add (*sp, EXCL_TIME);
       sym_id_add (*sp, EXCL_GRAPH);
+#ifdef __alpha__
       sym_id_add (*sp, EXCL_FLAT);
+#endif
     }
 
-  /* Read symbol table from core file.  */
+  /*
+   * For line-by-line profiling, also want to keep those
+   * functions off the flat profile:
+   */
+  if (line_granularity)
+    {
+      for (sp = &default_excluded_list[0]; *sp; sp++)
+	{
+	  sym_id_add (*sp, EXCL_FLAT);
+	}
+    }
+
+  /*
+   * Read symbol table from core file:
+   */
   core_init (a_out_name);
 
-  /* If we should ignore direct function calls, we need to load to
-     core's text-space.  */
+  /*
+   * If we should ignore direct function calls, we need to load
+   * to core's text-space:
+   */
   if (ignore_direct_calls)
-    core_get_text_space (core_bfd);
+    {
+      core_get_text_space (core_bfd);
+    }
 
-  /* Create symbols from core image.  */
-  if (external_symbol_table)
-    core_create_syms_from (external_symbol_table);
-  else if (line_granularity)
-    core_create_line_syms ();
+  /*
+   * Create symbols from core image:
+   */
+  if (line_granularity)
+    {
+      core_create_line_syms (core_bfd);
+    }
   else
-    core_create_function_syms ();
+    {
+      core_create_function_syms (core_bfd);
+    }
 
-  /* Translate sym specs into syms.  */
+  /*
+   * Translate sym specs into syms:
+   */
   sym_id_parse ();
 
   if (file_format == FF_PROF)
     {
+#ifdef PROF_SUPPORT_IMPLEMENTED
+      /*
+       * Get information about mon.out file(s):
+       */
+      do
+	{
+	  mon_out_read (gmon_name);
+	  if (optind < argc)
+	    {
+	      gmon_name = argv[optind];
+	    }
+	}
+      while (optind++ < argc);
+#else
       fprintf (stderr,
 	       _("%s: sorry, file format `prof' is not yet supported\n"),
 	       whoami);
       done (1);
+#endif
     }
   else
     {
-      /* Get information about gmon.out file(s).  */
+      /*
+       * Get information about gmon.out file(s):
+       */
       do
 	{
 	  gmon_out_read (gmon_name);
 	  if (optind < argc)
-	    gmon_name = argv[optind];
+	    {
+	      gmon_name = argv[optind];
+	    }
 	}
       while (optind++ < argc);
     }
 
-  /* If user did not specify output style, try to guess something
-     reasonable.  */
+  /*
+   * If user did not specify output style, try to guess something
+   * reasonable:
+   */
   if (output_style == 0)
     {
       if (gmon_input & (INPUT_HISTOGRAM | INPUT_CALL_GRAPH))
 	{
-	  if (gmon_input & INPUT_HISTOGRAM)
-	    output_style |= STYLE_FLAT_PROFILE;
-	  if (gmon_input & INPUT_CALL_GRAPH)
-	    output_style |= STYLE_CALL_GRAPH;
+	  output_style = STYLE_FLAT_PROFILE | STYLE_CALL_GRAPH;
 	}
       else
-	output_style = STYLE_EXEC_COUNTS;
-
+	{
+	  output_style = STYLE_EXEC_COUNTS;
+	}
       output_style &= ~user_specified;
     }
 
-  /* Dump a gmon.sum file if requested (before any other
-     processing!)  */
+  /*
+   * Dump a gmon.sum file if requested (before any other processing!):
+   */
   if (output_style & STYLE_SUMMARY_FILE)
     {
       gmon_out_write (GMONSUM);
@@ -581,7 +594,8 @@ This program is free software.  This program has absolutely no warranty.\n"));
       cg = cg_assemble ();
     }
 
-  /* Do some simple sanity checks.  */
+  /* do some simple sanity checks: */
+
   if ((output_style & STYLE_FLAT_PROFILE)
       && !(gmon_input & INPUT_HISTOGRAM))
     {
@@ -596,46 +610,50 @@ This program is free software.  This program has absolutely no warranty.\n"));
       done (1);
     }
 
-  /* Output whatever user whishes to see.  */
+  /* output whatever user whishes to see: */
+
   if (cg && (output_style & STYLE_CALL_GRAPH) && bsd_style_output)
     {
-      /* Print the dynamic profile.  */
-      cg_print (cg);
+      cg_print (cg);		/* print the dynamic profile */
     }
 
   if (output_style & STYLE_FLAT_PROFILE)
     {
-      /* Print the flat profile.  */
-      hist_print ();		
+      hist_print ();		/* print the flat profile */
     }
 
   if (cg && (output_style & STYLE_CALL_GRAPH))
     {
       if (!bsd_style_output)
 	{
-	  /* Print the dynamic profile.  */
-	  cg_print (cg);	
+	  cg_print (cg);	/* print the dynamic profile */
 	}
       cg_print_index ();
     }
 
   if (output_style & STYLE_EXEC_COUNTS)
-    print_exec_counts ();
-  
-  if (output_style & STYLE_ANNOTATED_SOURCE)
-    print_annotated_source ();
-  
-  if (output_style & STYLE_FUNCTION_ORDER)
-    cg_print_function_ordering ();
-  
-  if (output_style & STYLE_FILE_ORDER)
-    cg_print_file_ordering ();
+    {
+      print_exec_counts ();
+    }
 
+  if (output_style & STYLE_ANNOTATED_SOURCE)
+    {
+      print_annotated_source ();
+    }
+  if (output_style & STYLE_FUNCTION_ORDER)
+    {
+      cg_print_function_ordering ();
+    }
+  if (output_style & STYLE_FILE_ORDER)
+    {
+      cg_print_file_ordering ();
+    }
   return 0;
 }
 
 void
-done (int status)
+done (status)
+     int status;
 {
   exit (status);
 }

@@ -1,7 +1,14 @@
+	.SPACE $PRIVATE$
+	.SUBSPA $DATA$,QUAD=1,ALIGN=8,ACCESS=31
+	.SUBSPA $BSS$,QUAD=1,ALIGN=8,ACCESS=31,ZERO,SORT=82
+	.SPACE $TEXT$
+	.SUBSPA $LIT$,QUAD=0,ALIGN=8,ACCESS=44
+	.SUBSPA $CODE$,QUAD=0,ALIGN=8,ACCESS=44,CODE_ONLY
 	.IMPORT $global$,DATA
 	.IMPORT $$dyncall,MILLICODE
 ; gcc_compiled.:
-	.data
+	.SPACE $PRIVATE$
+	.SUBSPA $DATA$
 
 	.align 4
 done___2
@@ -11,6 +18,8 @@ done___2
 	.align 4
 re_syntax_options
 	.word 0
+	.SPACE $PRIVATE$
+	.SUBSPA $DATA$
 
 	.align 4
 re_error_msg
@@ -31,7 +40,8 @@ re_error_msg
 	.word L$C0013
 	.word L$C0014
 	.word L$C0015
-	.code
+	.SPACE $TEXT$
+	.SUBSPA $LIT$
 
 	.align 4
 L$C0015
@@ -82,7 +92,8 @@ L$C0001
 L$C0000
 	.STRING "No match\x00"
 	.EXPORT re_max_failures,DATA
-	.data
+	.SPACE $PRIVATE$
+	.SUBSPA $DATA$
 
 	.align 4
 re_max_failures
@@ -91,7 +102,8 @@ re_max_failures
 	.IMPORT realloc,CODE
 	.IMPORT free,CODE
 	.IMPORT strcmp,CODE
-	.code
+	.SPACE $TEXT$
+	.SUBSPA $LIT$
 
 	.align 4
 L$C0016
@@ -140,7 +152,8 @@ L$C0027
 	.IMPORT insert_op2,CODE
 	.IMPORT compile_range,CODE
 	.IMPORT group_in_compile_stack,CODE
-	.code
+	.SPACE $TEXT$
+	.SUBSPA $CODE$
 
 	.align 4
 regex_compile
@@ -3481,7 +3494,8 @@ L$0867
 	ldo -320(%r30),%r30 ;# 9060 addsi3/2
 	.EXIT
 	.PROCEND
-	.data
+	.SPACE $PRIVATE$
+	.SUBSPA $BSS$
 
 	.align 1
 re_syntax_table

@@ -28,11 +28,11 @@ main:
 	.mask	0x80000000,-8
 	.fmask	0x00000000,0
 	subu	$sp,$sp,40
-	sw	$31,32($sp)
+	sd	$31,32($sp)
 	jal	__gccmain
 	move	$2,$0
-	lw	$31,32($sp)
-	nop
+	ld	$31,32($sp)
+	#nop
 	.set	noreorder
 	.set	nomacro
 	j	$31
@@ -41,6 +41,3 @@ main:
 	.set	reorder
 
 	.end	main
-
-# Force at least 8 (non-delay-slot) zero bytes, to make 'objdump' print ...
-	.space  8

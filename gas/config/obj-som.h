@@ -1,12 +1,11 @@
 /* SOM object file format.
-   Copyright 1993, 1994, 1995, 1998, 2000, 2004, 2005, 2006, 2007
-   Free Software Foundation, Inc.
+   Copyright (C) 1993, 1994, 1995, 1998 Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
    GAS is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3, or (at your option)
+   the Free Software Foundation; either version 1, or (at your option)
    any later version.
 
    GAS is distributed in the hope that it will be useful,
@@ -16,8 +15,8 @@
 
    You should have received a copy of the GNU General Public License
    along with GAS; see the file COPYING.  If not, write to the Free
-   Software Foundation, 51 Franklin Street - Fifth Floor, Boston, MA
-   02110-1301, USA.
+   Software Foundation, 59 Temple Place - Suite 330, Boston, MA
+   02111-1307, USA.
 
    Written by the Center for Software Science at the University of Utah
    and by Cygnus Support.  */
@@ -27,6 +26,7 @@
 
 #define OBJ_SOM 1
 
+#include <bfd.h>
 #include "bfd/som.h"
 #include "targ-cpu.h"
 
@@ -36,14 +36,13 @@
 #endif
 
 /* should be conditional on address size!  */
-#define som_symbol(asymbol) ((som_symbol_type *) (&(asymbol)->the_bfd))
+#define som_symbol(asymbol) ((som_symbol_type *)(&(asymbol)->the_bfd))
 
-extern void som_file_symbol           (char *);
-extern void som_frob_file             (void);
-extern void obj_som_version           (int);
-extern void obj_som_init_stab_section (segT);
-extern void obj_som_copyright         (int);
-extern void obj_som_compiler          (int);
+extern void som_file_symbol PARAMS ((char *));
+extern void obj_som_version PARAMS ((int));
+extern void obj_som_init_stab_section PARAMS ((segT));
+extern void obj_som_copyright PARAMS ((int));
+extern void obj_som_compiler PARAMS ((int));
 
 #define obj_symbol_new_hook(s) {;}
 

@@ -1,12 +1,11 @@
 /* vax-inst.h - GNU - Part of vax.c
-   Copyright 1987, 1992, 1995, 2000, 2002, 2005, 2007
-   Free Software Foundation, Inc.
+   Copyright (C) 1987, 1992, 1995 Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
    GAS is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3, or (at your option)
+   the Free Software Foundation; either version 2, or (at your option)
    any later version.
 
    GAS is distributed in the hope that it will be useful,
@@ -16,7 +15,7 @@
 
    You should have received a copy of the GNU General Public License
    along with GAS; see the file COPYING.  If not, write to
-   the Free Software Foundation, 51 Franklin Street - Fifth Floor, Boston, MA 02110-1301, USA.  */
+   the Free Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 /*
  * This is part of vax-ins-parse.c & friends.
@@ -30,7 +29,7 @@ struct vop			/* vax instruction operand                 */
 {
   short int vop_ndx;		/* -1, or index register. eg 7=[R7]	   */
   short int vop_reg;		/* -1, or register number. eg @I^#=0xF     */
-  /* Helps distinguish "abs" from "abs(PC)".  */
+  /* Helps distinguish "abs" from "abs(PC)". */
   short int vop_mode;		/* addressing mode 4 bits. eg I^#=0x9	   */
   char vop_short;		/* operand displacement length as written  */
   /* ' '=none, "bilsw"=B^I^L^S^W^.           */
@@ -42,6 +41,7 @@ struct vop			/* vax instruction operand                 */
   char *vop_expr_end;		/* ... last char.			   */
   unsigned char vop_nbytes;	/* number of bytes in datum		   */
 };
+
 
 typedef long vax_opcodeT;	/* For initialising array of opcodes	   */
 /* Some synthetic opcodes > 16 bits!       */
@@ -55,15 +55,12 @@ typedef long vax_opcodeT;	/* For initialising array of opcodes	   */
 #define VAX_WIDTH_WORD_JUMP          '!'	/* and VIT_OPCODE_SYNTHETIC set.  */
 #define VAX_WIDTH_BYTE_JUMP	     ':'	/*                                */
 
-#define VAX_JSB (0x16)		/* Jump to subroutine			   */
 #define VAX_JMP (0x17)		/* Useful for branch optimising. Jump instr*/
 #define VAX_PC_RELATIVE_MODE (0xef)	/* Use it after VAX_JMP		   */
 #define VAX_ABSOLUTE_MODE (0x9F)/* Use as @#...			   */
 #define VAX_BRB (0x11)		/* Canonical branch.			   */
 #define VAX_BRW (0x31)		/* Another canonical branch		   */
-#define VAX_CALLS (0xFB)	/* Call with arg list on stack	           */
-#define VAX_CALLG (0xFA)	/* Call with arg list in memory		   */
-#define VAX_WIDEN_WORD (0x20)	/* Add this to byte branch to get word br.  */
+#define VAX_WIDEN_WORD (0x20)	/* Add this to byte branch to get word br. */
 #define VAX_WIDEN_LONG (0x6)	/* Add this to byte branch to get long jmp.*/
 /* Needs VAX_PC_RELATIVE_MODE byte after it*/
 

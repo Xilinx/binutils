@@ -1,3 +1,8 @@
+	.section	.rdata
+	.align	0
+.LC0:
+	.ascii	"some data\000"
+
 	.text
 	.align	0
 
@@ -71,11 +76,4 @@ misc:
 
 	.align
 .L2:
-	.word	fred
-	
-	.ltorg
-
-	# Add two nop instructions to ensure that the
-	# output is 32-byte aligned as required for arm-aout.
-	nop
-	nop
+	.word	.LC0

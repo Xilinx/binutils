@@ -1,8 +1,8 @@
 	.irp	param,1,2,3
-	.long	foo\param
+	.long	r\param
 	.endr
 
 	.irpc	param,123
-	.long	bar\param
+	.long	s\param
 	.endr
 

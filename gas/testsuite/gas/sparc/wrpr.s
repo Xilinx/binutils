@@ -15,4 +15,3 @@
 	wrpr %o5,%cleanwin
 	wrpr %o6,%otherwin
 	wrpr %o7,%wstate
-	wrpr %l0,%gl

@@ -1,6 +1,5 @@
 #objdump: -s -j .text
 #name: align
-#not-target: m32c-*
 
 # Test the alignment pseudo-op.
 

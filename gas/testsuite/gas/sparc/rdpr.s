@@ -16,5 +16,4 @@
 	rdpr %otherwin,%o6
 	rdpr %wstate,%o7
 	rdpr %fq,%l0
-	rdpr %gl,%l1
-	rdpr %ver,%l2
+	rdpr %ver,%l1

@@ -1,5 +1,13 @@
-	.level 1.1
-	.code
+	.SPACE $PRIVATE$
+	.SUBSPA $DATA$,QUAD=1,ALIGN=8,ACCESS=31
+	.SUBSPA $BSS$,QUAD=1,ALIGN=8,ACCESS=31,ZERO,SORT=82
+	.SPACE $TEXT$
+	.SUBSPA $LIT$,QUAD=0,ALIGN=8,ACCESS=44
+	.SUBSPA $CODE$,QUAD=0,ALIGN=8,ACCESS=44,CODE_ONLY
+
+	.SPACE $TEXT$
+	.SUBSPA $CODE$
+
 	.align 4
 ; Basic immediate instruction tests.  
 ;
@@ -28,6 +36,8 @@
 	
 	lpa %r4(%sr0,%r5),%r6
 	lpa,m %r4(%sr0,%r5),%r6
+	lha %r4(%sr0,%r5),%r6
+	lha,m %r4(%sr0,%r5),%r6
 	lci %r4(%sr0,%r5),%r6
 
 	idtlba %r4,(%sr0,%r5)

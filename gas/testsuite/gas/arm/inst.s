@@ -9,25 +9,25 @@
 	mov	r8, r9, asr r10
 	mov	r11, r12, asl r13
 	mov	r14, r15, rrx
-	moval	a2, a3
-	moveq	a3, a4
-	movne	v1, v2
-	movlt	v3, v4
-	movge	v5, v6
-	movle	v7, v8
-	movgt	ip, sp
+	moval	r1, r2
+	moveq	r2, r3
+	movne	r4, r5
+	movlt	r6, r7
+	movge	r8, r9
+	movle	r10, r11
+	movgt	r12, r13
 	movcc	r1, r2
 	movcs	r1, r3
 	movmi	r3, r6
-	movpl	wr, sb
+	movpl	r7, r9
 	movvs	r1, r8
-	movvc	SB, r1, lsr #31
-	movhi	r8, pc
-	movls	PC, lr
+	movvc	r9, r1, lsr #31
+	movhi	r8, r15
+	movls	r15, r14
 	movhs	r9, r8
 	movul	r1, r3
 	movs	r0, r8
-	movuls	r0, WR
+	movuls	r0, r7
 	
 	add	r0, r1, #10
 	add	r2, r3, r4
@@ -129,10 +129,10 @@
 	mulne	r0, r1, r0
 	mullss	r9, r8, r7
 
-	mla	r1, r9, sl, fp
-	mlas	r3, r4, r9, IP
-	mlalt	r9, r8, r7, SP
-	mlages	r4, r1, r3, LR
+	mla	r1, r9, r10, r11
+	mlas	r3, r4, r9, r12
+	mlalt	r9, r8, r7, r13
+	mlages	r4, r1, r3, r14
 
 	ldr	r0, [r1]
 	ldr	r1, [r1, r2]
@@ -150,7 +150,7 @@ foo:
 	
 	str	r0, [r1]
 	str	r1, [r1, r2]
-	str	r3, [r4, r3]!
+	str	r3, [r3, r4]!
 	str	r2, [r2, #32]
 	str	r2, [r3, r4, lsr #8]
 	streq	r4, [r5, r4, asl #9]!
@@ -165,59 +165,25 @@ bar:
 	ldmia	r0, {r1}
 	ldmeqib	r2, {r3, r4, r5}
 	ldmalda	r3, {r0-r15}^
-	ldmdb	FP!, {r0-r8, SL}
+	ldmdb	r11!, {r0-r8, r10}
 	ldmed	r1, {r0, r1, r2}|0xf0
 	ldmfd	r2, {r3, r4}+{r5, r6, r7, r8}
 	ldmea	r3, 3
-	ldmfa	r4, {r8, r9}^
+	ldmfa	r4!, {r8, r9}^
 	
 	stmia	r0, {r1}
 	stmeqib	r2, {r3, r4, r5}
 	stmalda	r3, {r0-r15}^
-	stmdb	r11!, {r0-r8, r10}
+	stmdb	r10!, {r0-r8, r10}
 	stmed	r1, {r0, r1, r2}
 	stmfd	r2, {r3, r4}
 	stmea	r3, 3
-	stmfa	r4, {r8, r9}^
+	stmfa	r4!, {r8, r9}^
 
 	swi	0x123456
 	swihs	0x33
 
 	bl	_wombat
-	blpl	hohum
+	blpl	bar
 	b	_wibble
 	ble	testerfunc
-
-	mov r1, r2, lsl #2
-	mov r1, r2, lsl #0 
-	mov r1, r2, lsl #31
-	mov r1, r2, lsl r3
-	mov r1, r2, lsr #2
-	mov r1, r2, lsr #31
-	mov r1, r2, lsr #32
-	mov r1, r2, lsr r3
-	mov r1, r2, asr #2
-	mov r1, r2, asr #31
-	mov r1, r2, asr #32
-	mov r1, r2, asr r3
-	mov r1, r2, ror #2
-	mov r1, r2, ror #31
-	mov r1, r2, ror r3
-	mov r1, r2, rrx
-	mov r1, r2, LSL #2
-	mov r1, r2, LSL #0 
-	mov r1, r2, LSL #31
-	mov r1, r2, LSL r3
-	mov r1, r2, LSR #2
-	mov r1, r2, LSR #31
-	mov r1, r2, LSR #32
-	mov r1, r2, LSR r3
-	mov r1, r2, ASR #2
-	mov r1, r2, ASR #31
-	mov r1, r2, ASR #32
-	mov r1, r2, ASR r3
-	mov r1, r2, ROR #2
-	mov r1, r2, ROR #31
-	mov r1, r2, ROR r3
-	mov r1, r2, RRX
-	

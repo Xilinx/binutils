@@ -1,54 +1,31 @@
 dnl Process this file with autoconf to produce a configure script.
 dnl
-AC_PREREQ(2.59)
-AC_INIT
-AC_CONFIG_SRCDIR(ar.c)
+AC_PREREQ(2.13)
+AC_INIT(ar.c)
 
-AC_CANONICAL_TARGET
-AC_ISC_POSIX
+AC_CANONICAL_SYSTEM
 
-changequote(,)dnl
-BFD_VERSION=`sed -n -e 's/^.._INIT_AUTOMAKE.*,[ 	]*\([^ 	]*\)[ 	]*).*/\1/p' < ${srcdir}/../bfd/configure.in`
-changequote([,])dnl
-AM_INIT_AUTOMAKE(binutils, ${BFD_VERSION})
+AM_INIT_AUTOMAKE(binutils, 2.9.4)
 
-AC_PROG_CC
-AC_GNU_SOURCE
-AC_USE_SYSTEM_EXTENSIONS
-
-AC_PLUGINS
-
-case "${target}" in
-changequote(,)dnl
-  sparc-*-solaris*|i[3-7]86-*-solaris*)
-changequote([,])dnl
-    # See comment in bfd/configure.in for the reason for this test.
-    # PR 9992/binutils: We have to duplicate the behaviour of bfd's
-    # configure script so that the utilities in this directory agree
-    # on the size of structures used to describe files.
-    if test "${target}" = "${host}" -a "$enable_largefile" != 'yes'; then
-      if test "$plugins" = "no"; then
-        enable_largefile="no"
-      fi
-    fi
-    ;;
-esac
-
-AC_SYS_LARGEFILE
-LT_INIT
+AM_PROG_LIBTOOL
 
 AC_ARG_ENABLE(targets,
 [  --enable-targets        alternative target configurations],
 [case "${enableval}" in
-  yes | "") AC_MSG_ERROR(enable-targets option must specify target names or 'all')
+  yes | "") AC_ERROR(enable-targets option must specify target names or 'all')
             ;;
   no)       enable_targets= ;;
   *)        enable_targets=$enableval ;;
 esac])dnl
+AC_ARG_ENABLE(commonbfdlib,
+[  --enable-commonbfdlib   build shared BFD/opcodes/libiberty library],
+[case "${enableval}" in
+  yes) commonbfdlib=true ;;
+  no)  commonbfdlib=false ;;
+  *)   AC_MSG_ERROR([bad value ${enableval} for BFD commonbfdlib option]) ;;
+esac])dnl
 
-AM_BINUTILS_WARNINGS
-		   
-AC_CONFIG_HEADERS(config.h:config.in)
+AM_CONFIG_HEADER(config.h:config.in)
 
 if test -z "$target" ; then
     AC_MSG_ERROR(Unrecognized target system type; please check config.sub.)
@@ -57,22 +34,16 @@ if test -z "$host" ; then
     AC_MSG_ERROR(Unrecognized host system type; please check config.sub.)
 fi
 
+AC_PROG_CC
+
 AC_PROG_YACC
 AM_PROG_LEX
 
-ALL_LINGUAS="da es fi fr id ja ro ru rw sk sv tr uk vi zh_CN zh_TW"
-ZW_GNU_GETTEXT_SISTER_DIR
-AM_PO_SUBDIRS
+ALL_LINGUAS=
+CY_GNU_GETTEXT
 
 AM_MAINTAINER_MODE
-AM_CONDITIONAL(GENINSRC_NEVER, false)
 AC_EXEEXT
-if test -n "$EXEEXT"; then
-  AC_DEFINE(HAVE_EXECUTABLE_SUFFIX, 1,
-	    [Does the platform use an executable suffix?])
-fi
-AC_DEFINE_UNQUOTED(EXECUTABLE_SUFFIX, "${EXEEXT}",
-		   [Suffix used for executables, if any.])
 
 # host-specific stuff:
 
@@ -88,69 +59,14 @@ AC_PROG_INSTALL
 
 BFD_CC_FOR_BUILD
 
-DEMANGLER_NAME=c++filt
-case "${host}" in
-  *-*-go32* | *-*-msdos*)
-    DEMANGLER_NAME=cxxfilt
-esac
-AC_SUBST(DEMANGLER_NAME)
-
-AC_CHECK_HEADERS(string.h strings.h stdlib.h unistd.h fcntl.h sys/file.h limits.h sys/param.h)
+AC_CHECK_HEADERS(string.h strings.h stdlib.h unistd.h fcntl.h sys/file.h)
 AC_HEADER_SYS_WAIT
 AC_FUNC_ALLOCA
-AC_CHECK_FUNCS(sbrk utimes setmode getc_unlocked strcoll)
-AC_CHECK_FUNC([mkstemp],
-	      AC_DEFINE([HAVE_MKSTEMP], 1,
-	      [Define to 1 if you have the `mkstemp' function.]))
-AC_CHECK_FUNC([mkdtemp],
-              AC_DEFINE([HAVE_MKDTEMP], 1,
-              [Define to 1 if you have the `mkdtemp' function.]))
-
-# Check whether fopen64 is available and whether _LARGEFILE64_SOURCE
-# needs to be defined for it
-AC_MSG_CHECKING([for fopen64])
-AC_CACHE_VAL(bu_cv_have_fopen64,
-[AC_LINK_IFELSE([AC_LANG_PROGRAM([#include <stdio.h>], [FILE *f = fopen64 ("/tmp/foo","r");])],
-bu_cv_have_fopen64=yes,
-[saved_CPPFLAGS=$CPPFLAGS
- CPPFLAGS="$CPPFLAGS -D_LARGEFILE64_SOURCE"
- AC_LINK_IFELSE([AC_LANG_PROGRAM([#include <stdio.h>], [FILE *f = fopen64 ("/tmp/foo","r");])],
- bu_cv_have_fopen64="need -D_LARGEFILE64_SOURCE",
- bu_cv_have_fopen64=no)
- CPPFLAGS=$saved_CPPFLAGS])])
-AC_MSG_RESULT($bu_cv_have_fopen64)
-if test "$bu_cv_have_fopen64" != no; then
-  AC_DEFINE([HAVE_FOPEN64], 1,
-	    [Is fopen64 available?])
-fi
-AC_MSG_CHECKING([for stat64])
-AC_CACHE_VAL(bu_cv_have_stat64,
-[AC_LINK_IFELSE([AC_LANG_PROGRAM([#include <sys/stat.h>], [struct stat64 st; stat64 ("/tmp/foo", &st);])],
-bu_cv_have_stat64=yes,
-[saved_CPPFLAGS=$CPPFLAGS
- CPPFLAGS="$CPPFLAGS -D_LARGEFILE64_SOURCE"
- AC_LINK_IFELSE([AC_LANG_PROGRAM([#include <sys/stat.h>], [struct stat64 st; stat64 ("/tmp/foo", &st);])],
- bu_cv_have_stat64="need -D_LARGEFILE64_SOURCE",
- bu_cv_have_stat64=no)
- CPPFLAGS=$saved_CPPFLAGS])])
-AC_MSG_RESULT($bu_cv_have_stat64)
-if test "$bu_cv_have_stat64" != no; then
-  AC_DEFINE([HAVE_STAT64], 1,
-	    [Is stat64 available?])
-fi
-if test "$bu_cv_have_fopen64" = "need -D_LARGEFILE64_SOURCE" \
-   || test "$bu_cv_have_stat64" = "need -D_LARGEFILE64_SOURCE"; then
-  AC_DEFINE([_LARGEFILE64_SOURCE], 1,
-	    [Enable LFS])
-  CPPFLAGS="$CPPFLAGS -D_LARGEFILE64_SOURCE"
-fi
-
-# Some systems have frexp only in -lm, not in -lc.
-AC_SEARCH_LIBS(frexp, m)
+AC_CHECK_FUNCS(sbrk utimes)
 
 AC_MSG_CHECKING(for time_t in time.h)
 AC_CACHE_VAL(bu_cv_decl_time_t_time_h,
-[AC_COMPILE_IFELSE([AC_LANG_PROGRAM([#include <time.h>], [time_t i;])],
+[AC_TRY_COMPILE([#include <time.h>], [time_t i;],
 bu_cv_decl_time_t_time_h=yes, bu_cv_decl_time_t_time_h=no)])
 AC_MSG_RESULT($bu_cv_decl_time_t_time_h)
 if test $bu_cv_decl_time_t_time_h = yes; then
@@ -160,7 +76,7 @@ fi
 
 AC_MSG_CHECKING(for time_t in sys/types.h)
 AC_CACHE_VAL(bu_cv_decl_time_t_types_h,
-[AC_COMPILE_IFELSE([AC_LANG_PROGRAM([#include <sys/types.h>], [time_t i;])],
+[AC_TRY_COMPILE([#include <sys/types.h>], [time_t i;],
 bu_cv_decl_time_t_types_h=yes, bu_cv_decl_time_t_types_h=no)])
 AC_MSG_RESULT($bu_cv_decl_time_t_types_h)
 if test $bu_cv_decl_time_t_types_h = yes; then
@@ -168,39 +84,27 @@ if test $bu_cv_decl_time_t_types_h = yes; then
 	    [Is the type time_t defined in <sys/types.h>?])
 fi
 
-AC_MSG_CHECKING(for a known getopt prototype in unistd.h)
-AC_CACHE_VAL(bu_cv_decl_getopt_unistd_h,
-[AC_COMPILE_IFELSE([AC_LANG_PROGRAM([#include <unistd.h>], [extern int getopt (int, char *const*, const char *);])],
-bu_cv_decl_getopt_unistd_h=yes, bu_cv_decl_getopt_unistd_h=no)])
-AC_MSG_RESULT($bu_cv_decl_getopt_unistd_h)
-if test $bu_cv_decl_getopt_unistd_h = yes; then
-  AC_DEFINE([HAVE_DECL_GETOPT], 1,
-	    [Is the prototype for getopt in <unistd.h> in the expected format?])
-fi
-
 # Under Next 3.2 <utime.h> apparently does not define struct utimbuf
 # by default.
 AC_MSG_CHECKING([for utime.h])
 AC_CACHE_VAL(bu_cv_header_utime_h,
-[AC_COMPILE_IFELSE([AC_LANG_PROGRAM([#include <sys/types.h>
+[AC_TRY_COMPILE([#include <sys/types.h>
 #ifdef HAVE_TIME_H
 #include <time.h>
 #endif
 #include <utime.h>],
-[struct utimbuf s;])],
+[struct utimbuf s;],
 bu_cv_header_utime_h=yes, bu_cv_header_utime_h=no)])
 AC_MSG_RESULT($bu_cv_header_utime_h)
 if test $bu_cv_header_utime_h = yes; then
   AC_DEFINE(HAVE_GOOD_UTIME_H, 1, [Does <utime.h> define struct utimbuf?])
 fi
 
-AC_CHECK_DECLS([fprintf, stpcpy, strstr, sbrk, getenv, environ, getc_unlocked,
-		snprintf, vsnprintf])
-
-# Link in zlib if we can.  This allows us to read compressed debug
-# sections.  This is used only by readelf.c (objdump uses bfd for
-# reading compressed sections).
-AC_SEARCH_LIBS(zlibVersion, z, [AC_CHECK_HEADERS(zlib.h)])
+BFD_NEED_DECLARATION(fprintf)
+BFD_NEED_DECLARATION(strstr)
+BFD_NEED_DECLARATION(sbrk)
+BFD_NEED_DECLARATION(getenv)
+BFD_NEED_DECLARATION(environ)
 
 BFD_BINARY_FOPEN
 
@@ -210,7 +114,7 @@ BFD_BINARY_FOPEN
 if test -n "$enable_targets"; then
     for targ in `echo $enable_targets | sed 's/,/ /g'`
     do
-	result=`$ac_config_sub $targ 2>/dev/null`
+	result=`${CONFIG_SHELL-/bin/sh} $ac_config_sub $targ 2>/dev/null`
 	if test -n "$result"; then
 	    canon_targets="$canon_targets $result"
 	else
@@ -220,22 +124,15 @@ if test -n "$enable_targets"; then
     done
 fi
 
-AC_CHECK_HEADER(iconv.h)
-AM_ICONV
-
 all_targets=false
 BUILD_NLMCONV=
 NLMCONV_DEFS=
 BUILD_SRCONV=
 BUILD_DLLTOOL=
 DLLTOOL_DEFS=
-DLLTOOL_DEFAULT=
 BUILD_WINDRES=
-BUILD_WINDMC=
 BUILD_DLLWRAP=
 BUILD_MISC=
-BUILD_INSTALL_MISC=
-OBJDUMP_DEFS=
 
 for targ in $target $canon_targets
 do
@@ -244,19 +141,10 @@ do
 	BUILD_NLMCONV='$(NLMCONV_PROG)$(EXEEXT)'
 	BUILD_SRCONV='$(SRCONV_PROG)'
 	NLMCONV_DEFS="-DNLMCONV_I386 -DNLMCONV_ALPHA -DNLMCONV_POWERPC -DNLMCONV_SPARC"
-	BUILD_MISC="${BUILD_MISC} "'bin2c$(EXEEXT_FOR_BUILD)'
-	BUILD_WINDRES='$(WINDRES_PROG)$(EXEEXT)'
-	BUILD_WINDMC='$(WINDMC_PROG)$(EXEEXT)'
-	BUILD_DLLTOOL='$(DLLTOOL_PROG)$(EXEEXT)'
-	if test -z "$DLLTOOL_DEFAULT"; then
-	  DLLTOOL_DEFAULT="-DDLLTOOL_DEFAULT_I386"
-	fi
-	DLLTOOL_DEFS="$DLLTOOL_DEFS -DDLLTOOL_I386"
-	BUILD_DLLWRAP='$(DLLWRAP_PROG)$(EXEEXT)'
     else
 	case $targ in
 changequote(,)dnl
-	i[3-7]86*-*-netware*) 
+	i[3456]86*-*-netware*) 
 changequote([,])dnl
 	  BUILD_NLMCONV='$(NLMCONV_PROG)$(EXEEXT)'
 	  NLMCONV_DEFS="$NLMCONV_DEFS -DNLMCONV_I386"
@@ -278,147 +166,32 @@ changequote([,])dnl
 	*-*-hms*) BUILD_SRCONV='$(SRCONV_PROG)' ;;
 	esac
 	case $targ in
-	arm-epoc-pe*)
+	arm-*pe*)
   	  BUILD_DLLTOOL='$(DLLTOOL_PROG)$(EXEEXT)'
-	  if test -z "$DLLTOOL_DEFAULT"; then
-	    DLLTOOL_DEFAULT="-DDLLTOOL_DEFAULT_ARM_EPOC"
-	  fi
-	  DLLTOOL_DEFS="$DLLTOOL_DEFS -DDLLTOOL_ARM_EPOC -DDLLTOOL_ARM"
-	  BUILD_WINDRES='$(WINDRES_PROG)$(EXEEXT)'
-	  BUILD_WINDMC='$(WINDMC_PROG)$(EXEEXT)'
-	  ;;
-	arm-wince-pe* | arm-*-wince | arm*-*-cegcc* | arm*-*-mingw32ce*)
-  	  BUILD_DLLTOOL='$(DLLTOOL_PROG)$(EXEEXT)'
-	  if test -z "$DLLTOOL_DEFAULT"; then
-	    DLLTOOL_DEFAULT="-DDLLTOOL_DEFAULT_ARM_WINCE"
-	  fi
-	  DLLTOOL_DEFS="$DLLTOOL_DEFS -DDLLTOOL_ARM_WINCE -DDLLTOOL_ARM"
-	  BUILD_WINDRES='$(WINDRES_PROG)$(EXEEXT)'
-	  BUILD_WINDMC='$(WINDMC_PROG)$(EXEEXT)'
-	  ;;
-	arm-*-pe*)
-  	  BUILD_DLLTOOL='$(DLLTOOL_PROG)$(EXEEXT)'
-	  if test -z "$DLLTOOL_DEFAULT"; then
-	    DLLTOOL_DEFAULT="-DDLLTOOL_DEFAULT_ARM"
-	  fi
 	  DLLTOOL_DEFS="$DLLTOOL_DEFS -DDLLTOOL_ARM"
 	  BUILD_WINDRES='$(WINDRES_PROG)$(EXEEXT)'
-	  BUILD_WINDMC='$(WINDMC_PROG)$(EXEEXT)'
-	  ;;
-	thumb-*-pe*)
+	 ;;
+	thumb-*pe*)
   	  BUILD_DLLTOOL='$(DLLTOOL_PROG)$(EXEEXT)'
-	  if test -z "$DLLTOOL_DEFAULT"; then
-	    DLLTOOL_DEFAULT="-DDLLTOOL_DEFAULT_ARM"
-	  fi
 	  DLLTOOL_DEFS="$DLLTOOL_DEFS -DDLLTOOL_ARM"
 	  BUILD_WINDRES='$(WINDRES_PROG)$(EXEEXT)'
-	  BUILD_WINDMC='$(WINDMC_PROG)$(EXEEXT)'
-	  ;;
-	x86_64-*-mingw*)
-  	  BUILD_DLLTOOL='$(DLLTOOL_PROG)$(EXEEXT)'
-	  if test -z "$DLLTOOL_DEFAULT"; then
-	    DLLTOOL_DEFAULT="-DDLLTOOL_DEFAULT_MX86_64"
-	  fi
-	  DLLTOOL_DEFS="$DLLTOOL_DEFS -DDLLTOOL_MX86_64"
-	  BUILD_WINDRES='$(WINDRES_PROG)$(EXEEXT)'
-	  BUILD_WINDMC='$(WINDMC_PROG)$(EXEEXT)'
-	  BUILD_DLLWRAP='$(DLLWRAP_PROG)$(EXEEXT)'
-	  ;;
+	 ;;
 changequote(,)dnl
-	i[3-7]86-*-pe* | i[3-7]86-*-cygwin* | i[3-7]86-*-mingw32** | i[3-7]86-*-netbsdpe*)
+	i[3-6]86-*pe* | i[3-6]86-*-cygwin* | i[3-6]86-*-mingw32*)
 changequote([,])dnl
   	  BUILD_DLLTOOL='$(DLLTOOL_PROG)$(EXEEXT)'
-	  if test -z "$DLLTOOL_DEFAULT"; then
-	    DLLTOOL_DEFAULT="-DDLLTOOL_DEFAULT_I386"
-	  fi
 	  DLLTOOL_DEFS="$DLLTOOL_DEFS -DDLLTOOL_I386"
 	  BUILD_WINDRES='$(WINDRES_PROG)$(EXEEXT)'
-	  BUILD_WINDMC='$(WINDMC_PROG)$(EXEEXT)'
 	  BUILD_DLLWRAP='$(DLLWRAP_PROG)$(EXEEXT)'
-	  ;;
-changequote(,)dnl
-	i[3-7]86-*-interix)
-changequote([,])dnl
-	  BUILD_DLLTOOL='$(DLLTOOL_PROG)'
-	  if test -z "$DLLTOOL_DEFAULT"; then
-	    DLLTOOL_DEFAULT="-DDLLTOOL_DEFAULT_I386"
-	  fi
-	  DLLTOOL_DEFS="$DLLTOOL_DEFS -DDLLTOOL_I386"
-	  ;;
-changequote(,)dnl
-	powerpc*-aix5.[01])
-changequote([,])dnl
-	  ;;
-changequote(,)dnl
-	powerpc*-aix[5-9].*)
-changequote([,])dnl
-	  OBJDUMP_DEFS="-DAIX_WEAK_SUPPORT"
-	  ;;
-	powerpc*-*-pe* | powerpc*-*-cygwin*)
+	 ;;
+	powerpc*-*-*pe* | powerpc*-*-cygwin*)
   	  BUILD_DLLTOOL='$(DLLTOOL_PROG)$(EXEEXT)'
-	  if test -z "$DLLTOOL_DEFAULT"; then
-	    DLLTOOL_DEFAULT="-DDLLTOOL_DEFAULT_PPC"
-	  fi
 	  DLLTOOL_DEFS="$DLLTOOL_DEFS -DDLLTOOL_PPC"
 	  BUILD_WINDRES='$(WINDRES_PROG)$(EXEEXT)'
-	  BUILD_WINDMC='$(WINDMC_PROG)$(EXEEXT)'
-	  ;;
-	powerpc*-*-linux* | powerpc*-*-elf* | powerpc*-*-eabi*)
-	  BUILD_INSTALL_MISC="${BUILD_INSTALL_MISC} embedspu"
-	  ;;
-	sh*-*-pe)
-  	  BUILD_DLLTOOL='$(DLLTOOL_PROG)$(EXEEXT)'
-	  if test -z "$DLLTOOL_DEFAULT"; then
-	    DLLTOOL_DEFAULT="-DDLLTOOL_DEFAULT_SH"
-	  fi
-	  DLLTOOL_DEFS="$DLLTOOL_DEFS -DDLLTOOL_SH"
-	  BUILD_WINDRES='$(WINDRES_PROG)$(EXEEXT)'
-	  BUILD_WINDMC='$(WINDMC_PROG)$(EXEEXT)'
-	  ;;
-	spu-*-*)
-	  BUILD_MISC="${BUILD_MISC} "'bin2c$(EXEEXT_FOR_BUILD)'
-	  ;;
-	mips*-*-pe)
-  	  BUILD_DLLTOOL='$(DLLTOOL_PROG)$(EXEEXT)'
-	  if test -z "$DLLTOOL_DEFAULT"; then
-	    DLLTOOL_DEFAULT="-DDLLTOOL_DEFAULT_MIPS"
-	  fi
-	  DLLTOOL_DEFS="$DLLTOOL_DEFS -DDLLTOOL_MIPS"
-	  BUILD_WINDRES='$(WINDRES_PROG)$(EXEEXT)'
-	  BUILD_WINDMC='$(WINDMC_PROG)$(EXEEXT)'
-	  ;;
-	mcore-*-pe)
-  	  BUILD_DLLTOOL='$(DLLTOOL_PROG)$(EXEEXT)'
-	  if test -z "$DLLTOOL_DEFAULT"; then
-	    DLLTOOL_DEFAULT="-DDLLTOOL_DEFAULT_MCORE"
-	  fi
-	  DLLTOOL_DEFS="$DLLTOOL_DEFS -DDLLTOOL_MCORE"
-	  BUILD_WINDRES='$(WINDRES_PROG)$(EXEEXT)'
-	  BUILD_WINDMC='$(WINDMC_PROG)$(EXEEXT)'
-	  ;;
-	mcore-*-elf)
-  	  BUILD_DLLTOOL='$(DLLTOOL_PROG)$(EXEEXT)'
-	  if test -z "$DLLTOOL_DEFAULT"; then
-	    DLLTOOL_DEFAULT="-DDLLTOOL_DEFAULT_MCORE_ELF"
-	  fi
-	  DLLTOOL_DEFS="$DLLTOOL_DEFS -DDLLTOOL_MCORE_ELF"
-	  ;;
-  	mep-*)
-	  OBJDUMP_DEFS="-DSKIP_ZEROES=256 -DSKIP_ZEROES_AT_END=0"
-	  ;;
+	 ;;
 	esac
     fi
 done
-
-DLLTOOL_DEFS="$DLLTOOL_DEFS $DLLTOOL_DEFAULT"
-
-if test "${with_windres+set}" = set; then
-	  BUILD_WINDRES='$(WINDRES_PROG)$(EXEEXT)'
-fi
-
-if test "${with_windmc+set}" = set; then
-	  BUILD_WINDMC='$(WINDMC_PROG)$(EXEEXT)'
-fi
 
 AC_SUBST(NLMCONV_DEFS)
 AC_SUBST(BUILD_NLMCONV)
@@ -426,11 +199,8 @@ AC_SUBST(BUILD_SRCONV)
 AC_SUBST(BUILD_DLLTOOL)
 AC_SUBST(DLLTOOL_DEFS)
 AC_SUBST(BUILD_WINDRES)
-AC_SUBST(BUILD_WINDMC)
 AC_SUBST(BUILD_DLLWRAP)
 AC_SUBST(BUILD_MISC)
-AC_SUBST(BUILD_INSTALL_MISC)
-AC_SUBST(OBJDUMP_DEFS)
 
 AC_DEFINE_UNQUOTED(TARGET, "${target}", [Configured target name.])
 
@@ -441,23 +211,11 @@ if test "x$targ_underscore" = "xyes"; then
 else
     UNDERSCORE=0
 fi
-AC_DEFINE_UNQUOTED(TARGET_PREPENDS_UNDERSCORE, $UNDERSCORE,
- [Define to 1 if user symbol names have a leading underscore, 0 if not.])
+AC_SUBST(UNDERSCORE)
 
-# Emulation 
-targ=$target
-. ${srcdir}/configure.tgt
-EMULATION=$targ_emul
-EMULATION_VECTOR=$targ_emul_vector	
-
-AC_SUBST(EMULATION)
-AC_SUBST(EMULATION_VECTOR)
-
-# Required for html and install-html
-AC_SUBST(datarootdir)
-AC_SUBST(docdir)
-AC_SUBST(htmldir)
-AC_SUBST(pdfdir)
-
-AC_CONFIG_FILES(Makefile doc/Makefile po/Makefile.in:po/Make-in)
-AC_OUTPUT
+AC_OUTPUT(Makefile po/Makefile.in:po/Make-in,
+[
+case "x$CONFIG_FILES" in
+*) sed -e '/POTFILES =/r po/POTFILES' po/Makefile.in > po/Makefile ;;
+esac
+])

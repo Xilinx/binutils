@@ -1,12 +1,11 @@
 /* tc-vax.h -- Header file for tc-vax.c.
-   Copyright 1987, 1991, 1992, 1993, 1995, 1996, 1997, 2000, 2002, 2005,
-   2006, 2007  Free Software Foundation, Inc.
+   Copyright (C) 1987, 91, 92, 93, 95, 96, 1997 Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
    GAS is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3, or (at your option)
+   the Free Software Foundation; either version 2, or (at your option)
    any later version.
 
    GAS is distributed in the hope that it will be useful,
@@ -16,60 +15,25 @@
 
    You should have received a copy of the GNU General Public License
    along with GAS; see the file COPYING.  If not, write to the Free
-   Software Foundation, 51 Franklin Street - Fifth Floor, Boston, MA
-   02110-1301, USA.  */
+   Software Foundation, 59 Temple Place - Suite 330, Boston, MA
+   02111-1307, USA. */
 
 #define TC_VAX 1
 
 #define TARGET_BYTES_BIG_ENDIAN 0
 
-#ifdef OBJ_AOUT
-#ifdef TE_NetBSD
-#define TARGET_FORMAT "a.out-vax-netbsd"
-#endif
-#ifndef TARGET_FORMAT
-#define TARGET_FORMAT "a.out-vax-bsd"
-#endif
-#endif
+#define NO_RELOC 0
+#define NOP_OPCODE 0x01
 
-#ifdef OBJ_VMS
-#define TARGET_FORMAT "vms-vax"
-#endif
-
-#ifdef OBJ_ELF
-#define TARGET_FORMAT "elf32-vax"
-#endif
-
-#define TARGET_ARCH	bfd_arch_vax
-
-#define NO_RELOC	BFD_RELOC_NONE
-#define NOP_OPCODE	0x01
-
+#define tc_aout_pre_write_hook(x)	{;}	/* not used */
+#define tc_crawl_symbol_chain(a)	{;}	/* not used */
+#define tc_headers_hook(a)		{;}	/* not used */
 #define md_operand(x)
 
-#ifdef OBJ_ELF
-#define TC_PARSE_CONS_EXPRESSION(EXP, NBYTES) vax_cons (EXP, NBYTES)
-#define TC_CONS_FIX_NEW vax_cons_fix_new
-void vax_cons (expressionS *, int);
-void vax_cons_fix_new (struct frag *, int, unsigned int, struct expressionS *);
-#endif
+long md_chars_to_number PARAMS ((unsigned char *, int));
 
 extern const struct relax_type md_relax_table[];
 #define TC_GENERIC_RELAX_TABLE md_relax_table
-
-/* Values passed to md_apply_fix don't include symbol values.  */
-#define MD_APPLY_SYM_VALUE(FIX) 0
-
-#define tc_fix_adjustable(FIX)					\
-	((FIX)->fx_r_type != BFD_RELOC_VTABLE_INHERIT		\
-	 && (FIX)->fx_r_type != BFD_RELOC_32_PLT_PCREL		\
-	 && (FIX)->fx_r_type != BFD_RELOC_32_GOT_PCREL		\
-	 && (FIX)->fx_r_type != BFD_RELOC_VTABLE_ENTRY		\
-	 && ((FIX)->fx_pcrel					\
-	     || ((FIX)->fx_subsy != NULL			\
-		 && (S_GET_SEGMENT ((FIX)->fx_subsy)		\
-		     == S_GET_SEGMENT ((FIX)->fx_addsy)))	\
-	     || S_IS_LOCAL ((FIX)->fx_addsy)))
 
 /*
  * Local Variables:
@@ -77,3 +41,5 @@ extern const struct relax_type md_relax_table[];
  * fill-column: 131
  * End:
  */
+
+/* end of tc-vax.h */

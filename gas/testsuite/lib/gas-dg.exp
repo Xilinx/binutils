@@ -21,7 +21,7 @@ proc gas-dg-test { prog do_what tool_flags } {
 	"run" {
 	    # This is the only place where we care if an executable was
 	    # created or not.  If it was, dg.exp will try to run it.
-	    remote_file host delete "$output_file"
+	    catch "exec rm -f $output_file"
 	}
 	default {
 	    perror "$do_what: not a valid dg-do keyword"
@@ -36,8 +36,7 @@ proc gas-dg-test { prog do_what tool_flags } {
     regsub -all "//" $dir "/" dir
     regsub -all "//" $prog "/" prog
     if [string match "$dir/*" $prog] {
-	# We use (?q) to treat $dir as a literal.
-	regsub "(?q)$dir" $prog "" prog
+	regsub "$dir" $prog "" prog
     }
 
     # FIXME: This should be gas_start but it doesn't set comp_output.

@@ -20,10 +20,10 @@ SECTIONS
     ${RELOCATING+__sdata_ = .;}
     *(.data)
     ${CONSTRUCTING+CONSTRUCTORS}
-    ${RELOCATING+_edata  =  ${DATA_ALIGNMENT};}
-    ${RELOCATING+__edata  =  ${DATA_ALIGNMENT};}
+    ${RELOCATING+_edata  =  .;}
+    ${RELOCATING+__edata  =  .;}
   }
-  .bss ${RELOCATING+${DATA_ALIGNMENT}} :
+  .bss ${RELOCATING+ SIZEOF(.data) + ADDR (.data)} :
   {
    ${RELOCATING+ __bss_start = .};
    *(.bss)

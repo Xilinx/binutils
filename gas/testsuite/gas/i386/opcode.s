@@ -130,9 +130,9 @@ foo:
  mov    %edx,0x90909090(%eax)
  mov    0x90909090(%eax),%dl
  mov    0x90909090(%eax),%edx
- movw   %ss,0x90909090(%eax)
+ movl   %ss,0x90909090(%eax)
  lea    0x90909090(%eax),%edx
- movw   0x90909090(%eax),%ss
+ movl   0x90909090(%eax),%ss
  popl   0x90909090(%eax)
  xchg   %eax,%eax
  xchg   %eax,%ecx
@@ -565,27 +565,3 @@ foo:
  bsr    0x90909090(%eax),%dx
  movsbw 0x90909090(%eax),%dx
  xadd   %dx,0x90909090(%eax)
-
- xchg   %ax,%ax
-
- sldt	%eax
- sldt	%ax
- sldt	(%eax)
- smsw	%eax
- smsw	%ax
- smsw	(%eax)
- str	%eax
- str	%ax
- str	(%eax)
-
- shrd   %cl,%edx,%eax
- shld   %cl,%edx,%eax
-
- test   %eax,%ebx
- test   %ebx,%eax
- test   (%eax),%ebx
-
- cmovpe  0x90909090(%eax),%edx
- cmovpo 0x90909090(%eax),%edx
- cmovpe  0x90909090(%eax),%dx
- cmovpo 0x90909090(%eax),%dx

@@ -3,7 +3,6 @@ NR == 1	{
     print "/* ==> Do not modify this file!!  It is created automatically"
     printf "   from %s using the gen-c-prog.awk script.  <== */\n\n", FILE
     print "#include <stdio.h>"
-    print "#include \"ansidecl.h\""
 }
 
 	{
@@ -13,7 +12,6 @@ NR == 1	{
 		print "}"
 	      curfun = FUNCTION
 	      print ""
-	      print "void ", FUNCTION, "(FILE *);"
 	      print "void";
 	      printf "%s (file)\n", FUNCTION
 	      print "     FILE *file;";

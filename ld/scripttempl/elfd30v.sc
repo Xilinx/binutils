@@ -1,5 +1,5 @@
 
-CTOR=".ctors  : 
+CTOR=".ctors ${CONSTRUCTING-0} : 
   {
     ${CONSTRUCTING+ __CTOR_LIST__ = .; }
     /* gcc uses crtbegin.o to find the start of
@@ -13,25 +13,23 @@ CTOR=".ctors  :
        is in.  */
 
     KEEP (*crtbegin.o(.ctors))
-    KEEP (*crtbegin?.o(.ctors))
 
     /* We don't want to include the .ctor section from
-       the crtend.o file until after the sorted ctors.
+       from the crtend.o file until after the sorted ctors.
        The .ctor section from the crtend file contains the
        end of ctors marker and it must be last */
 
-    KEEP (*(EXCLUDE_FILE (*crtend.o *crtend?.o) .ctors))
+    KEEP (*(EXCLUDE_FILE (*crtend.o) .ctors))
     KEEP (*(SORT(.ctors.*)))
     KEEP (*(.ctors))
     ${CONSTRUCTING+ __CTOR_END__ = .; }
   } ${RELOCATING+ > ${DATA_MEMORY}}"
 
-DTOR="  .dtors	 :
+DTOR="  .dtors	${CONSTRUCTING-0} :
   {
     ${CONSTRUCTING+ __DTOR_LIST__ = .; }
     KEEP (*crtbegin.o(.dtors))
-    KEEP (*crtbegin?.o(.dtors))
-    KEEP (*(EXCLUDE_FILE (*crtend.o *crtend?.o) .dtors))
+    KEEP (*(EXCLUDE_FILE (*crtend.o) .dtors))
     KEEP (*(SORT(.dtors.*)))
     KEEP (*(.dtors))
     ${CONSTRUCTING+ __DTOR_END__ = .; }
@@ -53,57 +51,57 @@ SECTIONS
 {
   /* Read-only sections, merged into text segment: */
   ${TEXT_DYNAMIC+${DYNAMIC}}
-  .hash			 : { *(.hash) }
-  .dynsym		 : { *(.dynsym) }
-  .dynstr		 : { *(.dynstr) }
-  .gnu.version		 : { *(.gnu.version) }
-  .gnu.version_d	 : { *(.gnu.version_d) }
-  .gnu.version_r	 : { *(.gnu.version_r) }
+  .hash			${RELOCATING-0} : { *(.hash) }
+  .dynsym		${RELOCATING-0} : { *(.dynsym) }
+  .dynstr		${RELOCATING-0} : { *(.dynstr) }
+  .gnu.version		${RELOCATING-0} : { *(.gnu.version) }
+  .gnu.version_d	${RELOCATING-0} : { *(.gnu.version_d) }
+  .gnu.version_r	${RELOCATING-0} : { *(.gnu.version_r) }
 
-  .rel.text		 : { *(.rel.text) *(.rel.gnu.linkonce.t*) }
-  .rela.text		 : { *(.rela.text) *(.rela.gnu.linkonce.t*) }
-  .rel.data		 : { *(.rel.data) *(.rel.gnu.linkonce.d*) }
-  .rela.data		 : { *(.rela.data) *(.rela.gnu.linkonce.d*) }
-  .rel.rodata		 : { *(.rel.rodata) *(.rel.gnu.linkonce.r*) }
-  .rela.rodata		 : { *(.rela.rodata) *(.rela.gnu.linkonce.r*) }
-  .rel.stext		 : { *(.rel.stest) }
-  .rela.stext		 : { *(.rela.stest) }
-  .rel.etext		 : { *(.rel.etest) }
-  .rela.etext		 : { *(.rela.etest) }
-  .rel.sdata		 : { *(.rel.sdata) }
-  .rela.sdata		 : { *(.rela.sdata) }
-  .rel.edata		 : { *(.rel.edata) }
-  .rela.edata		 : { *(.rela.edata) }
-  .rel.eit_v		 : { *(.rel.eit_v) }
-  .rela.eit_v		 : { *(.rela.eit_v) }
-  .rel.sbss		 : { *(.rel.sbss) }
-  .rela.sbss		 : { *(.rela.sbss) }
-  .rel.ebss		 : { *(.rel.ebss) }
-  .rela.ebss		 : { *(.rela.ebss) }
-  .rel.srodata		 : { *(.rel.srodata) }
-  .rela.srodata		 : { *(.rela.srodata) }
-  .rel.erodata		 : { *(.rel.erodata) }
-  .rela.erodata		 : { *(.rela.erodata) }
-  .rel.got		 : { *(.rel.got) }
-  .rela.got		 : { *(.rela.got) }
-  .rel.ctors		 : { *(.rel.ctors) }
-  .rela.ctors		 : { *(.rela.ctors) }
-  .rel.dtors		 : { *(.rel.dtors) }
-  .rela.dtors		 : { *(.rela.dtors) }
-  .rel.init		 : { *(.rel.init) }
-  .rela.init		 : { *(.rela.init) }
-  .rel.fini		 : { *(.rel.fini) }
-  .rela.fini		 : { *(.rela.fini) }
-  .rel.bss		 : { *(.rel.bss) }
-  .rela.bss		 : { *(.rela.bss) }
-  .rel.plt		 : { *(.rel.plt) }
-  .rela.plt		 : { *(.rela.plt) }
+  .rela.text		${RELOCATING-0} : { *(.rela.text) *(.rela.gnu.linkonce.t*) }
+  .rela.data		${RELOCATING-0} : { *(.rela.data) *(.rela.gnu.linkonce.d*) }
+  .rela.rodata		${RELOCATING-0} : { *(.rela.rodata) *(.rela.gnu.linkonce.r*) }
+  .rela.stext		${RELOCATING-0} : { *(.rela.stest) }
+  .rela.etext		${RELOCATING-0} : { *(.rela.etest) }
+  .rela.sdata		${RELOCATING-0} : { *(.rela.sdata) }
+  .rela.edata		${RELOCATING-0} : { *(.rela.edata) }
+  .rela.eit_v		${RELOCATING-0} : { *(.rela.eit_v) }
+  .rela.sbss		${RELOCATING-0} : { *(.rela.sbss) }
+  .rela.ebss		${RELOCATING-0} : { *(.rela.ebss) }
+  .rela.srodata		${RELOCATING-0} : { *(.rela.srodata) }
+  .rela.erodata		${RELOCATING-0} : { *(.rela.erodata) }
+  .rela.got		${RELOCATING-0} : { *(.rela.got) }
+  .rela.ctors		${RELOCATING-0} : { *(.rela.ctors) }
+  .rela.dtors		${RELOCATING-0} : { *(.rela.dtors) }
+  .rela.init		${RELOCATING-0} : { *(.rela.init) }
+  .rela.fini		${RELOCATING-0} : { *(.rela.fini) }
+  .rela.bss		${RELOCATING-0} : { *(.rela.bss) }
+  .rela.plt		${RELOCATING-0} : { *(.rela.plt) }
 
-  .init			 : { *(.init) } =${NOP-0}
+  .rel.data		${RELOCATING-0} : { *(.rel.data) *(.rel.gnu.linkonce.d*) }
+  .rel.rodata		${RELOCATING-0} : { *(.rel.rodata) *(.rel.gnu.linkonce.r*) }
+  .rel.stext		${RELOCATING-0} : { *(.rel.stest) }
+  .rel.etext		${RELOCATING-0} : { *(.rel.etest) }
+  .rel.sdata		${RELOCATING-0} : { *(.rel.sdata) }
+  .rel.edata		${RELOCATING-0} : { *(.rel.edata) }
+  .rel.sbss		${RELOCATING-0} : { *(.rel.sbss) }
+  .rel.ebss		${RELOCATING-0} : { *(.rel.ebss) }
+  .rel.eit_v		${RELOCATING-0} : { *(.rel.eit_v) }
+  .rel.srodata		${RELOCATING-0} : { *(.rel.srodata) }
+  .rel.erodata		${RELOCATING-0} : { *(.rel.erodata) }
+  .rel.got		${RELOCATING-0} : { *(.rel.got) }
+  .rel.ctors		${RELOCATING-0} : { *(.rel.ctors) }
+  .rel.dtors		${RELOCATING-0} : { *(.rel.dtors) }
+  .rel.init		${RELOCATING-0} : { *(.rel.init) }
+  .rel.fini		${RELOCATING-0} : { *(.rel.fini) }
+  .rel.bss		${RELOCATING-0} : { *(.rel.bss) }
+  .rel.plt		${RELOCATING-0} : { *(.rel.plt) }
+
+  .init			${RELOCATING-0} : { *(.init) } =${NOP-0}
   ${DATA_PLT-${PLT}}
 
   /* Internal text space */
-  .stext	 : { *(.stext) }		${RELOCATING+ > text}
+  .stext	${RELOCATING-0} : { *(.stext) }		${RELOCATING+ > text}
 
   /* Internal text space or external memory */
   .text :
@@ -116,23 +114,19 @@ SECTIONS
   } ${RELOCATING+ > ${TEXT_MEMORY}}
 
   /* Internal data space */
-  .srodata	 : { *(.srodata) }	${RELOCATING+ > data}
-  .sdata	 : { *(.sdata) }		${RELOCATING+ > data}
+  .srodata	${RELOCATING-0} : { *(.srodata) }	${RELOCATING+ > data}
+  .sdata	${RELOCATING-0} : { *(.sdata) }		${RELOCATING+ > data}
 
   /* Internal data space or external memory */
-  .rodata	 : { *(.rodata) }	${RELOCATING+ > ${DATA_MEMORY}}
+  .rodata	${RELOCATING-0} : { *(.rodata) }	${RELOCATING+ > ${DATA_MEMORY}}
 
   /* C++ exception support.  */
-  .eh_frame	 : { KEEP (*(.eh_frame)) }	${RELOCATING+ > ${DATA_MEMORY}}
-  .gcc_except_table  : { *(.gcc_except_table) }	${RELOCATING+ > ${DATA_MEMORY}}
-
-  /* Java class registration support.  */
-  .jcr		 : { KEEP (*(.jcr)) }	${RELOCATING+ >${DATA_MEMORY}}
+  .eh_frame	${RELOCATING-0} : { *(.eh_frame) }	${RELOCATING+ > ${DATA_MEMORY}}
 
   ${RELOCATING+${CTOR}}
   ${RELOCATING+${DTOR}}
 
-  .data		 :
+  .data		${RELOCATING-0} :
   {
     *(.data)
     *(.gnu.linkonce.d*)
@@ -141,31 +135,31 @@ SECTIONS
   } ${RELOCATING+ > ${DATA_MEMORY}}
 
   /* External memory */
-  .etext	 :
+  .etext	${RELOCATING-0} :
   {
     ${RELOCATING+ PROVIDE (__etext_start = .) ; }
     *(.etext)
     ${RELOCATING+ PROVIDE (__etext_end = .) ; }
   } ${RELOCATING+ > emem}
 
-  .erodata	 : { *(.erodata) }	${RELOCATING+ > emem}
-  .edata	 : { *(.edata) }		${RELOCATING+ > emem}
+  .erodata	${RELOCATING-0} : { *(.erodata) }	${RELOCATING+ > emem}
+  .edata	${RELOCATING-0} : { *(.edata) }		${RELOCATING+ > emem}
 
-  .sbss		 :
+  .sbss		${RELOCATING-0} :
   {
     ${RELOCATING+ PROVIDE (__sbss_start = .) ; }
     *(.sbss)
     ${RELOCATING+ PROVIDE (__sbss_end = .) ;  }
   } ${RELOCATING+ > data}
 
-  .ebss		 :
+  .ebss		${RELOCATING-0} :
   {
     ${RELOCATING+ PROVIDE (__ebss_start = .) ; }
     *(.ebss)
     ${RELOCATING+ PROVIDE (__ebss_end = .) ;  }
   } ${RELOCATING+ > data}
 
-  .bss		 :
+  .bss		${RELOCATING-0} :
   {
     ${RELOCATING+ PROVIDE (__bss_start = .) ; }
     *(.bss)
@@ -174,7 +168,7 @@ SECTIONS
     ${RELOCATING+ _end = . ;  }
   } ${RELOCATING+ > ${DATA_MEMORY}}
 
-  .eit_v	 :
+  .eit_v	${RELOCATING-0} :
   {
     ${RELOCATING+ PROVIDE (__eit_start = .) ; }
     *(.eit_v)
@@ -208,7 +202,7 @@ SECTIONS
   .debug_pubnames 0 : { *(.debug_pubnames) }
 
   /* DWARF 2 */
-  .debug_info     0 : { *(.debug_info) *(.gnu.linkonce.wi.*) }
+  .debug_info     0 : { *(.debug_info) }
   .debug_abbrev   0 : { *(.debug_abbrev) }
   .debug_line     0 : { *(.debug_line) }
   .debug_frame    0 : { *(.debug_frame) }

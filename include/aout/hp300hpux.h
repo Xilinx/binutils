@@ -1,5 +1,5 @@
 /* Special version of <a.out.h> for use under hp-ux.
-   Copyright 1988, 1993, 1995, 2001, 2009 Free Software Foundation, Inc. */
+   Copyright (C) 1988,1993 Free Software Foundation, Inc. */
 
 struct hp300hpux_exec_bytes
 {
@@ -73,13 +73,13 @@ struct hp300hpux_header_extension
 #define N_BADMAG(x) ((_N_BADMAG (x)) || (_N_BADMACH (x)))
 
 #define N_DATADDR(x) \
-  ((N_MAGIC (x) == OMAGIC || N_MAGIC (x) == HPUX_DOT_O_MAGIC)		\
-   ? (N_TXTADDR (x) + N_TXTSIZE (x))					\
-   : (N_SEGSIZE (x) + ((N_TXTADDR (x) + N_TXTSIZE (x) - 1)		\
-		       & ~ (bfd_vma) (N_SEGSIZE (x) - 1))))
+    ((N_MAGIC(x)==OMAGIC || N_MAGIC(x)==HPUX_DOT_O_MAGIC) ? \
+        (N_TXTADDR(x)+N_TXTSIZE(x)) \
+     :  (N_SEGSIZE(x) + ((N_TXTADDR(x)+N_TXTSIZE(x)-1) & ~(N_SEGSIZE(x)-1))))
 
-#define _N_BADMACH(x) \
-  (((N_MACHTYPE (x)) != HP9000S200_ID) && ((N_MACHTYPE (x)) != HP98x6_ID))
+#define _N_BADMACH(x)                                                   \
+(((N_MACHTYPE (x)) != HP9000S200_ID) &&                                 \
+ ((N_MACHTYPE (x)) != HP98x6_ID))
 
 #define _N_BADMAG(x)	  (N_MAGIC(x) != HPUX_DOT_O_MAGIC \
                         && N_MAGIC(x) != OMAGIC		\
@@ -114,3 +114,6 @@ struct hp300hpux_header_extension
 #define TARGET_PAGE_SIZE 0x1000
 #define SEGMENT_SIZE 0x1000
 #define TEXT_START_ADDR 0
+
+#undef N_SHARED_LIB
+#define N_SHARED_LIB(x)  ( 0 /* no shared libraries */ )

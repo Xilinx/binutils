@@ -22,7 +22,7 @@ ${LIB_SEARCH_DIRS}
    "-u mainCRTStartup" to make sure it gets included in the link.
 */
 
-${RELOCATING+ENTRY (mainCRTStartup)}
+ENTRY(mainCRTStartup)
 
 SECTIONS
 {
@@ -32,7 +32,6 @@ SECTIONS
 	{
 	    ${RELOCATING+ *(.init);}
 	    *(.text)
-	    ${RELOCATING+ *(.text.*)}
 	    *(.gcc_except_table)
 	    ${CONSTRUCTING+ ___CTOR_LIST__ = .; __CTOR_LIST__ = . ; 
 		        LONG (-1); *(.ctors); *(.ctor); LONG (0); }

@@ -64,12 +64,18 @@ shlib_shlibcall ()
 /* This function calls a function defined in this object in the shared
    library.  The main program will override the called function.  */
 
-extern int shlib_overriddencall2 ();
+extern int shlib_overiddencall2 ();
 
 int
 shlib_shlibcall2 ()
 {
   return shlib_overriddencall2 ();
+}
+
+int
+shlib_overriddencall2 ()
+{
+  return 7;
 }
 #endif
 

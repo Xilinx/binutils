@@ -1,6 +1,9 @@
 #ifndef cg_arcs_h
 #define cg_arcs_h
 
+#include "gprof.h"
+#include "symtab.h"
+
 /*
  * Arc structure for call-graph.
  *
@@ -24,9 +27,9 @@ Arc;
 extern unsigned int num_cycles;	/* number of cycles discovered */
 extern Sym *cycle_header;	/* cycle headers */
 
-extern void arc_add (Sym * parent, Sym * child, unsigned long count);
-extern Arc *arc_lookup (Sym * parent, Sym * child);
-extern Sym **cg_assemble (void);
+extern void arc_add PARAMS ((Sym * parent, Sym * child, unsigned long count));
+extern Arc *arc_lookup PARAMS ((Sym * parent, Sym * child));
+extern Sym **cg_assemble PARAMS ((void));
 extern Arc **arcs;
 extern unsigned int numarcs;
 

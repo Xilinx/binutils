@@ -1,5 +1,5 @@
 /* This file is obj-evax.h
-   Copyright 1996, 2000, 2005, 2007, 2009 Free Software Foundation, Inc.
+   Copyright (C) 1996 Free Software Foundation, Inc.
    Contributed by Klaus Kämpf (kkaempf@progis.de) of
      proGIS Software, Aachen, Germany.
 
@@ -7,7 +7,7 @@
 
    GAS is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3, or (at your option)
+   the Free Software Foundation; either version 2, or (at your option)
    any later version.
 
    GAS is distributed in the hope that it will be useful,
@@ -17,33 +17,23 @@
 
    You should have received a copy of the GNU General Public License
    along with GAS; see the file COPYING.  If not, write to
-   the Free Software Foundation, 51 Franklin Street - Fifth Floor, Boston,
-   MA 02110-1301, USA.  */
+   the Free Software Foundation, 59 Temple Place - Suite 330, Boston,
+   MA 02111-1307, USA.  */
 
 /*
  * This file is obj-evax.h and is intended to be a template for
  * object format specific header files.
  */
 
-#include "as.h"
-
-/* define an obj specific macro off which target cpu back ends may key.  */
+/* define an obj specific macro off which target cpu back ends may key. */
 #define OBJ_EVAX 1
 
-/* include whatever target cpu is appropriate.  */
+/* include whatever target cpu is appropriate. */
 #include "targ-cpu.h"
 
+#ifdef BFD_ASSEMBLER
 #define OUTPUT_FLAVOR bfd_target_evax_flavour
-
-struct fix;
-
-struct alpha_linkage_fixups
-{
-  struct alpha_linkage_fixups *next;
-  struct fix *fixp;
-  segT seg;
-  symbolS *label;
-};
+#endif
 
 /*
  * SYMBOLS
@@ -68,15 +58,11 @@ obj_symbol_type;		/* should be the format's symbol structure */
 
 typedef void *object_headers;
 
-#define OBJ_EMIT_LINENO(a,b,c)	/* must be *something*.  This no-op's it out.  */
+#define DEFAULT_MAGIC_NUMBER_FOR_OBJECT_FILE (0)	/* your magic number */
 
-/* This field keeps the symbols position in the link section.  */
-#define OBJ_SYMFIELD_TYPE valueT
+#define OBJ_EMIT_LINENO(a,b,c)	/* must be *something*.  This no-op's it out. */
 
-#define obj_symbol_new_hook(s)       evax_symbol_new_hook (s)
-#define obj_frob_symbol(s,p)         evax_frob_symbol (s, &p)
-#define obj_frob_file_before_adjust  evax_frob_file_before_adjust
-#define obj_frob_file_before_fix     evax_frob_file_before_fix
+#define obj_symbol_new_hook(s)        {;}
 
 #define S_SET_OTHER(S,V)
 #define S_SET_TYPE(S,T)
@@ -93,23 +79,11 @@ typedef void *object_headers;
 #define PDSC_S_K_MIN_REGISTER_SIZE 24
 #define PDSC_S_K_NULL_SIZE 16
 
-#define PDSC_S_M_HANDLER_VALID 0x10		/* low byte */
-#define PDSC_S_M_HANDLER_DATA_VALID 0x40	/* low byte */
-#define PDSC_S_M_BASE_REG_IS_FP 0x80		/* low byte */
+#define PDSC_S_M_BASE_REG_IS_FP 0x80	/* low byte */
 #define PDSC_S_M_NATIVE 0x10		/* high byte */
 #define PDSC_S_M_NO_JACKET 0x20		/* high byte */
 
 #define LKP_S_K_SIZE 16
-
-extern segT alpha_link_section;
-extern struct alpha_linkage_fixups *alpha_linkage_fixup_root;
-
-extern void evax_section (int);
-extern void evax_symbol_new_hook (symbolS *);
-extern void evax_frob_symbol (symbolS *, int *);
-extern void evax_frob_file_before_adjust (void);
-extern void evax_frob_file_before_fix (void);
-extern char *evax_shorten_name (char *);
 
 /*
  * Local Variables:
@@ -117,3 +91,5 @@ extern char *evax_shorten_name (char *);
  * fill-column: 131
  * End:
  */
+
+/* end of obj-evax.h */

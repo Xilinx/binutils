@@ -1,4 +1,5 @@
-	.code
+	.space $TEXT$
+	.subspa $CODE$
 	.align 4
 	.export divu,entry
 	.proc

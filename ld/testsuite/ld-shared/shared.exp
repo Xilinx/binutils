@@ -1,24 +1,19 @@
 # Expect script for ld-shared tests
-#   Copyright 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003,
-#   2004, 2005, 2007, 2008, 2009
-#   Free Software Foundation, Inc.
+#   Copyright (C) 1994, 1995, 1996, 1997, 1998 Free Software Foundation
 #
-# This file is part of the GNU Binutils.
-#
-# This program is free software; you can redistribute it and/or modify
+# This file is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 3 of the License, or
+# the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
-#
+# 
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-#
+# 
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
-# MA 02110-1301, USA.
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #
 # Written by Ian Lance Taylor (ian@cygnus.com)
 #
@@ -32,35 +27,38 @@ if ![isnative] then {return}
 
 # This test can only be run on a couple of ELF platforms.
 # Square bracket expressions seem to confuse istarget.
-if { ![istarget hppa*64*-*-hpux*] \
-     && ![istarget hppa*-*-linux*] \
-     && ![istarget i?86-*-sysv4*] \
-     && ![istarget i?86-*-unixware] \
-     && ![istarget i?86-*-elf*] \
-     && ![istarget i?86-*-linux*] \
-     && ![istarget ia64-*-elf*] \
-     && ![istarget ia64-*-linux*] \
+if { ![istarget i386-*-sysv4*] \
+     && ![istarget i486-*-sysv4*] \
+     && ![istarget i586-*-sysv4*] \
+     && ![istarget i386-*-unixware] \
+     && ![istarget i486-*-unixware] \
+     && ![istarget i586-*-unixware] \
+     && ![istarget i386-*-elf*] \
+     && ![istarget i486-*-elf*] \
+     && ![istarget i586-*-elf*] \
+     && ![istarget i386-*-linux*] \
+     && ![istarget i486-*-linux*] \
+     && ![istarget i586-*-linux*] \
      && ![istarget m68k-*-linux*] \
      && ![istarget mips*-*-irix5*] \
-     && ![istarget mips*-*-linux*] \
      && ![istarget powerpc-*-elf*] \
      && ![istarget powerpc-*-linux*] \
      && ![istarget powerpc-*-sysv4*] \
      && ![istarget sparc*-*-elf] \
      && ![istarget sparc*-*-solaris2*] \
      && ![istarget sparc*-*-sunos4*] \
-     && ![istarget sparc*-*-linux*] \
-     && ![istarget arm*-*-linux*] \
-     && ![istarget alpha*-*-linux*] \
      && ![istarget rs6000*-*-aix*] \
-     && ![istarget powerpc*-*-aix*] \
-     && ![istarget s390*-*-linux*] \
-     && ![istarget x86_64-*-linux*] } {
+     && ![istarget powerpc*-*-aix*] } {
     return
 }
 
-if { [istarget *-*-linux*aout*] \
-     || [istarget *-*-linux*oldld*] } {
+if { [istarget i386-*-linuxaout*] \
+     || [istarget i486-*-linuxaout*] \
+     || [istarget i586-*-linuxaout*] \
+     || [istarget i386-*-linuxoldld*] \
+     || [istarget i486-*-linuxoldld*] \
+     || [istarget i586-*-linuxoldld*] \
+     || [istarget m68k-*-linuxaout*] } {
     return
 }
 
@@ -99,7 +97,7 @@ if { [istarget rs6000*-*-aix*] || [istarget powerpc*-*-aix*] } {
 
 # The test procedure.
 proc shared_test { progname testname main sh1 sh2 dat args } {
-    global CC
+    global ld
     global srcdir
     global subdir
     global exec_output
@@ -114,7 +112,7 @@ proc shared_test { progname testname main sh1 sh2 dat args } {
     if { [istarget rs6000*-*-aix*] || [istarget powerpc*-*-aix*] } {
 	set shared "-bM:SRE -bE:$tmpdir/xcoff.exp"
     }
-    if {![ld_simple_link $CC $tmpdir/$progname.so "$shared $shldflags $tmpdir/$sh1 $tmpdir/$sh2"]} {
+    if {![ld_simple_link $ld $tmpdir/$progname.so "$shared $shldflags $tmpdir/$sh1 $tmpdir/$sh2"]} {
         fail "$testname"
     	return
     }
@@ -127,7 +125,7 @@ proc shared_test { progname testname main sh1 sh2 dat args } {
     if { [istarget rs6000*-*-aix*] || [istarget powerpc*-*-aix*] } {
 	set rpath /lib:$tmpdir
     }
-    if ![ld_simple_link $CC $tmpdir/$progname "-Wl,-rpath,$rpath $tmpdir/$main $tmpdir/$progname.so"] {
+    if ![ld_link $ld $tmpdir/$progname "-rpath $rpath $tmpdir/$main $tmpdir/$progname.so"] {
     	fail "$testname"
     	return
     }
@@ -202,16 +200,6 @@ if ![ld_compile "$CC $CFLAGS $SHCFLAG" $srcdir/$subdir/main.c $tmpdir/mainnp.o] 
 	# SunOS non PIC shared libraries don't permit some cases of
 	# overriding.
 	setup_xfail "*-*-sunos4*"
-	setup_xfail "ia64-*-linux*"
-	setup_xfail "alpha*-*-linux*"
-	if { ![istarget hppa*64*-*-linux*] } {
-	    setup_xfail "hppa*-*-linux*"
-	}
-	if { [istarget sparc*-*-linux*] && [is_elf64 $tmpdir/mainnp.o] } {
-	    setup_xfail "sparc*-*-linux*"
-	}
-	setup_xfail "x86_64-*-linux*"
-	setup_xfail "s390x-*-linux*"
 	shared_test shnp "shared (non PIC)" mainnp.o sh1np.o sh2np.o shared
 
 	# Test ELF shared library relocations with a non-zero load
@@ -219,19 +207,6 @@ if ![ld_compile "$CC $CFLAGS $SHCFLAG" $srcdir/$subdir/main.c $tmpdir/mainnp.o] 
 	# relocations for various targets are broken in the case where
 	# the load address is not zero (which is the default).
 	setup_xfail "*-*-sunos4*"
-	setup_xfail "*-*-linux*libc1"
-	setup_xfail "powerpc-*-linux*"
-	setup_xfail "ia64-*-linux*"
-	setup_xfail "alpha*-*-linux*"
-	setup_xfail "mips*-*-linux*"
-	if { ![istarget hppa*64*-*-linux*] } {
-	    setup_xfail "hppa*-*-linux*"
-	}
-	if { [istarget sparc*-*-linux*] && [is_elf64 $tmpdir/mainnp.o] } {
-	    setup_xfail "sparc*-*-linux*"
-	}
-	setup_xfail "x86_64-*-linux*"
-	setup_xfail "s390x-*-linux*"
 	shared_test shnp "shared (non PIC, load offset)" \
 		mainnp.o sh1np.o sh2np.o shared \
 		"-T $srcdir/$subdir/elf-offset.ld"
@@ -250,11 +225,6 @@ if ![ld_compile "$CC $CFLAGS $SHCFLAG" $srcdir/$subdir/main.c $tmpdir/mainnp.o] 
 	    shared_test shp "shared" mainnp.o sh1p.o sh2p.o xcoff
 	} else {
 	    shared_test shp "shared" mainnp.o sh1p.o sh2p.o shared
-	    ld_compile "$CC $CFLAGS -DSYMBOLIC_TEST -DXCOFF_TEST $SHCFLAG" $srcdir/$subdir/main.c $tmpdir/mainnp.o
-	    ld_compile "$CC $CFLAGS -DSYMBOLIC_TEST -DXCOFF_TEST $SHCFLAG $picflag" $srcdir/$subdir/sh1.c $tmpdir/sh1p.o
-	    shared_test shp "shared -Bsymbolic" mainnp.o sh1p.o sh2p.o symbolic "-Bsymbolic" 
-	    ld_compile "$CC $CFLAGS $SHCFLAG" $srcdir/$subdir/main.c $tmpdir/mainnp.o
-	    ld_compile "$CC $CFLAGS $SHCFLAG $picflag" $srcdir/$subdir/sh1.c $tmpdir/sh1p.o
 	} }
     }
 }
@@ -271,16 +241,6 @@ if ![ld_compile "$CC $CFLAGS $SHCFLAG $picflag" $srcdir/$subdir/main.c $tmpdir/m
 	    # SunOS non PIC shared libraries don't permit some cases of
 	    # overriding.
 	    setup_xfail "*-*-sunos4*"
-	    setup_xfail "ia64-*-linux*"
-	    setup_xfail "alpha*-*-linux*"
-	    if { ![istarget hppa*64*-*-linux*] } {
-		setup_xfail "hppa*-*-linux*"
-	    }
-	    if { [istarget sparc*-*-linux*] && [is_elf64 $tmpdir/mainp.o] } {
-		setup_xfail "sparc*-*-linux*"
-	    }
-	    setup_xfail "x86_64-*-linux*"
-	    setup_xfail "s390x-*-linux*"
 	    shared_test shmpnp "shared (PIC main, non PIC so)" mainp.o sh1np.o sh2np.o shared
 	}
     } else {

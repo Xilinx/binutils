@@ -1,13 +1,12 @@
 /* tc-i960.h - Basic 80960 instruction formats.
-   Copyright 1989, 1990, 1991, 1992, 1993, 1994, 1995, 1997, 1998, 1999,
-   2000, 2001, 2002, 2003, 2005, 2007, 2008
+   Copyright (C) 1989, 90, 91, 92, 93, 94, 95, 96, 97, 1998
    Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
    GAS is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as
-   published by the Free Software Foundation; either version 3,
+   published by the Free Software Foundation; either version 2,
    or (at your option) any later version.
 
    GAS is distributed in the hope that it will be useful, but
@@ -17,16 +16,11 @@
 
    You should have received a copy of the GNU General Public License
    along with GAS; see the file COPYING.  If not, write to the Free
-   Software Foundation, 51 Franklin Street - Fifth Floor, Boston, MA
-   02110-1301, USA.  */
+   Software Foundation, 59 Temple Place - Suite 330, Boston, MA
+   02111-1307, USA. */
 
 #ifndef TC_I960
 #define TC_I960 1
-
-#ifdef OBJ_ELF
-#define TARGET_FORMAT "elf32-i960"
-#define TARGET_ARCH bfd_arch_i960
-#endif
 
 #define TARGET_BYTES_BIG_ENDIAN 0
 
@@ -52,12 +46,23 @@
  */
 
 /* tailor gas */
+#define SYMBOLS_NEED_BACKPOINTERS
 #define LOCAL_LABELS_FB 1
 #define BITFIELD_CONS_EXPRESSIONS
 
 /* tailor the coff format */
+#define BFD_ARCH				bfd_arch_i960
+#define COFF_FLAGS				F_AR32WR
 #define COFF_MAGIC				I960ROMAGIC
+#define OBJ_COFF_SECTION_HEADER_HAS_ALIGNMENT
 #define OBJ_COFF_MAX_AUXENTRIES			(2)
+#define TC_COUNT_RELOC(FIXP)			(!(FIXP)->fx_done)
+#define TC_COFF_FIX2RTYPE(FIXP)			tc_coff_fix2rtype(FIXP)
+#define TC_COFF_SIZEMACHDEP(FRAGP)		tc_coff_sizemachdep(FRAGP)
+#define TC_COFF_SET_MACHINE(HDRS)		tc_headers_hook (HDRS)
+extern void tc_headers_hook ();
+extern short tc_coff_fix2rtype ();
+extern int tc_coff_sizemachdep ();
 
 /* MEANING OF 'n_other' in the symbol record.
  *
@@ -91,7 +96,7 @@
 #define	N_CALLNAME	((char)-1)
 #define	N_BALNAME	((char)-2)
 
-/* i960 uses a custom relocation record.  */
+/* i960 uses a custom relocation record. */
 
 /* let obj-aout.h know */
 #define CUSTOM_RELOC_FORMAT 1
@@ -117,67 +122,37 @@ struct relocation_info
       nuthin:1;			/* Unused				*/
   };
 
-/* No shared lib support, so we don't need to ensure externally
-   visible symbols can be overridden.  */
-#define EXTERN_FORCE_RELOC 0
-
-/* Makes no sense to use the difference of 2 arbitrary symbols
-   as the target of a call instruction.  */
-#define TC_FORCE_RELOCATION_SUB_SAME(FIX, SEG)	\
-  ((FIX)->fx_tcbit				\
-   || ! SEG_NORMAL (SEG)			\
-   || TC_FORCE_RELOCATION (FIX))
-
-/* reloc_callj() may replace a 'call' with a 'calls' or a
-   'bal', in which cases it modifies *fixP as appropriate.
-   In the case of a 'calls', no further work is required.  */
-extern int reloc_callj (struct fix *);
-
-#define TC_FORCE_RELOCATION_ABS(FIX)		\
-  (TC_FORCE_RELOCATION (FIX)			\
-   || reloc_callj (FIX))
-
-#define TC_FORCE_RELOCATION_LOCAL(FIX)		\
-  (!(FIX)->fx_pcrel				\
-   || TC_FORCE_RELOCATION (FIX)		\
-   || reloc_callj (FIX))
-
 #ifdef OBJ_COFF
 
 /* We store the bal information in the sy_tc field.  */
-#define TC_SYMFIELD_TYPE symbolS *
+#define TC_SYMFIELD_TYPE struct symbol *
 
-#define TC_ADJUST_RELOC_COUNT(FIX,COUNT) \
-  { fixS *tcfixp = (FIX); \
+#define TC_ADJUST_RELOC_COUNT(FIXP,COUNT) \
+  { fixS *tcfixp = (FIXP); \
     for (;tcfixp;tcfixp=tcfixp->fx_next) \
       if (tcfixp->fx_tcbit && tcfixp->fx_addsy != 0) \
-	++(COUNT); \
+        ++(COUNT); \
   }
 #endif
 
-extern int i960_validate_fix (struct fix *, segT);
-#define TC_VALIDATE_FIX(FIX,SEGTYPE,LABEL) \
-	if (!i960_validate_fix (FIX, SEGTYPE)) goto LABEL
+extern int i960_validate_fix PARAMS ((struct fix *, segT, struct symbol **));
+#define TC_VALIDATE_FIX(FIXP,SEGTYPE,LABEL) \
+	if (i960_validate_fix (FIXP, SEGTYPE, &add_symbolP) != 0) goto LABEL
 
-#define tc_fix_adjustable(FIX)		((FIX)->fx_bsr == 0)
+#define tc_fix_adjustable(FIXP)		((FIXP)->fx_bsr == 0)
 
-#ifndef OBJ_ELF
-/* Values passed to md_apply_fix sometimes include symbol values.  */
-#define MD_APPLY_SYM_VALUE(FIX) tc_fix_adjustable (FIX)
-#else
-/* Values passed to md_apply_fix don't include the symbol value.  */
-#define MD_APPLY_SYM_VALUE(FIX) 0
-#endif
-
-extern void brtab_emit (void);
+extern void brtab_emit PARAMS ((void));
 #define md_end()	brtab_emit ()
 
-extern void tc_set_bal_of_call (symbolS *, symbolS *);
+extern void reloc_callj ();
 
-extern struct symbol *tc_get_bal_of_call (symbolS *);
+extern void tc_set_bal_of_call PARAMS ((struct symbol *, struct symbol *));
 
-extern void i960_handle_align (struct frag *);
+extern struct symbol *tc_get_bal_of_call PARAMS ((struct symbol *));
+
+extern void i960_handle_align ();
 #define HANDLE_ALIGN(FRAG)	i960_handle_align (FRAG)
+#define NEED_FX_R_TYPE
 #define NO_RELOC -1
 
 #define md_operand(x)
@@ -192,3 +167,5 @@ extern const struct relax_type md_relax_table[];
 #define TC_INIT_FIX_DATA(F)	((F)->tc_fix_data.bsr = 0)
 
 #endif
+
+/* end of tc-i960.h */

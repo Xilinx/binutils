@@ -1,42 +1,26 @@
 # Test weak symbols.
 # By Ian Lance Taylor, Cygnus Solutions.
-#   Copyright 1999, 2000, 2002, 2004, 2005, 2006, 2007, 2009
-#   Free Software Foundation, Inc.
-#
-# This file is part of the GNU Binutils.
-#
-# This program is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
-# MA 02110-1301, USA.
 
 set testname "weak symbols"
 
-# This test only works for ELF targets.
-# It ought to work for some a.out targets, but it doesn't.
-if {! [is_elf_format] && ! [is_pecoff_format]} {
-    unsupported $testname
+# This test only works for ELF targets.  It ought to work for some
+# a.out targets, but it doesn't.
+
+if { ![istarget *-*-sysv4*] \
+     && ![istarget *-*-unixware*] \
+     && ![istarget *-*-elf*] \
+     && ![istarget *-*-eabi*] \
+     && ![istarget *-*-linux*] \
+     && ![istarget *-*-irix5*] \
+     && ![istarget *-*-irix6*] \
+     && ![istarget *-*-solaris2*] } then {
     return
 }
 
-# Weak symbols are broken for non-i386 PE targets.
-if {! [istarget i?86-*-*]} {
-    setup_xfail *-*-pe*
-    setup_xfail x86_64-*-pe*
+if { [istarget *-*-linuxaout*] \
+     || [istarget *-*-linuxoldld*] } {
+    return
 }
-
-# hppa64 and or32 are incredibly broken
-setup_xfail hppa64-*-* or32-*-*
 
 if {! [ld_assemble $as $srcdir/$subdir/weak1.s tmpdir/weak1.o]
     || ! [ld_assemble $as $srcdir/$subdir/weak2.s tmpdir/weak2.o]} then {
@@ -45,28 +29,22 @@ if {! [ld_assemble $as $srcdir/$subdir/weak1.s tmpdir/weak1.o]
     return
 }
 
-global LDFLAGS
-set saved_LDFLAGS "$LDFLAGS"
-if [istarget "x86_64-*-mingw*"] then {
-  set LDFLAGS "$LDFLAGS --image-base 0"
-}
-
 set weak_regexp_big \
 ".*Contents of section .text:.*1000 00001008 0000200c 12121212 34343434.*Contents of section .data:.*2000 00001008 0000200c 56565656 78787878.*"
 
 set weak_regexp_little \
 ".*Contents of section .text:.*1000 08100000 0c200000 12121212 34343434.*Contents of section .data:.*2000 08100000 0c200000 56565656 78787878.*"
 
-if {! [ld_simple_link $ld tmpdir/weak "$flags -T $srcdir/$subdir/weak.t tmpdir/weak1.o tmpdir/weak2.o"] } then {
+if {! [ld_simple_link $ld tmpdir/weak "-T $srcdir/$subdir/weak.t tmpdir/weak1.o tmpdir/weak2.o"] } then {
     fail $testname
 } else {
-    if {![is_remote host] && [which $objdump] == 0} then {
+    if {[which $objdump] == 0} then {
 	unresolved $testname
-	set LDFLAGS "$saved_LDFLAGS"
 	return
     }
 
-    set exec_output [run_host_cmd "$objdump" "-s tmpdir/weak"]
+    verbose -log "$objdump -s tmpdir/weak"
+    catch "exec $objdump -s tmpdir/weak" exec_output
     set exec_output [prune_warnings $exec_output]
     verbose -log $exec_output
 
@@ -77,5 +55,3 @@ if {! [ld_simple_link $ld tmpdir/weak "$flags -T $srcdir/$subdir/weak.t tmpdir/w
 	fail $testname
     }
 }
-
-set LDFLAGS "$saved_LDFLAGS"

@@ -1,6 +1,7 @@
 ; Should check to make sure something useful gets put on those .word
 ; statements.
-	.code
+        .space	$TEXT$
+        .subspa	$CODE$
 
 	.align	8
 	.export	icode,data

@@ -1,14 +1,12 @@
 /* resbin.c -- manipulate the Windows binary resource format.
-   Copyright 1997, 1998, 1999, 2002, 2003, 2005, 2006, 2007
-   Free Software Foundation, Inc.
+   Copyright 1997, 1998 Free Software Foundation, Inc.
    Written by Ian Lance Taylor, Cygnus Support.
-   Rewritten by Kai Tietz, Onevision.
 
    This file is part of GNU Binutils.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
+   the Free Software Foundation; either version 2 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -18,96 +16,107 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston, MA
-   02110-1301, USA.  */
-
+   Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA
+   02111-1307, USA.  */
 
 /* This file contains functions to convert between the binary resource
    format and the internal structures that we want to use.  The same
    binary resource format is used in both res and COFF files.  */
 
-#include "sysdep.h"
 #include "bfd.h"
 #include "bucomm.h"
 #include "libiberty.h"
 #include "windres.h"
 
+/* Macros to swap in values.  */
+
+#define get_16(be, s) ((be) ? bfd_getb16 (s) : bfd_getl16 (s))
+#define get_32(be, s) ((be) ? bfd_getb32 (s) : bfd_getl32 (s))
+
 /* Local functions.  */
 
-static void toosmall (const char *);
-
-static unichar *get_unicode (windres_bfd *, const bfd_byte *, rc_uint_type, rc_uint_type *);
-static int get_resid (windres_bfd *, rc_res_id *, const bfd_byte *, rc_uint_type);
-static rc_res_resource *bin_to_res_generic (windres_bfd *, enum rc_res_type,
-					    const bfd_byte *, rc_uint_type);
-static rc_res_resource *bin_to_res_cursor (windres_bfd *, const bfd_byte *, rc_uint_type);
-static rc_res_resource *bin_to_res_menu (windres_bfd *,const bfd_byte *, rc_uint_type);
-static rc_menuitem *bin_to_res_menuitems (windres_bfd *, const bfd_byte *, rc_uint_type,
-					  rc_uint_type *);
-static rc_menuitem *bin_to_res_menuexitems (windres_bfd *, const bfd_byte *, rc_uint_type,
-					    rc_uint_type *);
-static rc_res_resource *bin_to_res_dialog (windres_bfd *, const bfd_byte *, rc_uint_type);
-static rc_res_resource *bin_to_res_string (windres_bfd *,const bfd_byte *, rc_uint_type);
-static rc_res_resource *bin_to_res_fontdir (windres_bfd *, const bfd_byte *, rc_uint_type);
-static rc_res_resource *bin_to_res_accelerators (windres_bfd *, const bfd_byte *, rc_uint_type);
-static rc_res_resource *bin_to_res_rcdata (windres_bfd *, const bfd_byte *, rc_uint_type, int);
-static rc_res_resource *bin_to_res_group_cursor (windres_bfd *, const bfd_byte *, rc_uint_type);
-static rc_res_resource *bin_to_res_group_icon (windres_bfd *, const bfd_byte *, rc_uint_type);
-static rc_res_resource *bin_to_res_version (windres_bfd *, const bfd_byte *, rc_uint_type);
-static rc_res_resource *bin_to_res_userdata (windres_bfd *, const bfd_byte *, rc_uint_type);
-static rc_res_resource *bin_to_res_toolbar (windres_bfd *, const bfd_byte *, rc_uint_type);
-static void get_version_header (windres_bfd *, const bfd_byte *, rc_uint_type, const char *,
-				unichar **, rc_uint_type *, rc_uint_type *, rc_uint_type *,
-				rc_uint_type *);
+static void toosmall PARAMS ((const char *));
+static unichar *get_unicode
+  PARAMS ((const unsigned char *, unsigned long, int, int *));
+static int get_resid
+  PARAMS ((struct res_id *, const unsigned char *, unsigned long, int));
+static struct res_resource *bin_to_res_generic
+  PARAMS ((enum res_type, const unsigned char *, unsigned long));
+static struct res_resource *bin_to_res_cursor
+  PARAMS ((const unsigned char *, unsigned long, int));
+static struct res_resource *bin_to_res_menu
+  PARAMS ((const unsigned char *, unsigned long, int));
+static struct menuitem *bin_to_res_menuitems
+  PARAMS ((const unsigned char *, unsigned long, int, int *));
+static struct menuitem *bin_to_res_menuexitems
+  PARAMS ((const unsigned char *, unsigned long, int, int *));
+static struct res_resource *bin_to_res_dialog
+  PARAMS ((const unsigned char *, unsigned long, int));
+static struct res_resource *bin_to_res_string
+  PARAMS ((const unsigned char *, unsigned long, int));
+static struct res_resource *bin_to_res_fontdir
+  PARAMS ((const unsigned char *, unsigned long, int));
+static struct res_resource *bin_to_res_accelerators
+  PARAMS ((const unsigned char *, unsigned long, int));
+static struct res_resource *bin_to_res_rcdata
+  PARAMS ((const unsigned char *, unsigned long, int));
+static struct res_resource *bin_to_res_group_cursor
+  PARAMS ((const unsigned char *, unsigned long, int));
+static struct res_resource *bin_to_res_group_icon
+  PARAMS ((const unsigned char *, unsigned long, int));
+static struct res_resource *bin_to_res_version
+  PARAMS ((const unsigned char *, unsigned long, int));
+static struct res_resource *bin_to_res_userdata
+  PARAMS ((const unsigned char *, unsigned long, int));
 
 /* Given a resource type ID, a pointer to data, a length, return a
-   rc_res_resource structure which represents that resource.  The caller
+   res_resource structure which represents that resource.  The caller
    is responsible for initializing the res_info and coff_info fields
    of the returned structure.  */
 
-rc_res_resource *
-bin_to_res (windres_bfd *wrbfd, rc_res_id type, const bfd_byte *data,
-	    rc_uint_type length)
+struct res_resource *
+bin_to_res (type, data, length, big_endian)
+     struct res_id type;
+     const unsigned char *data;
+     unsigned long length;
+     int big_endian;
 {
   if (type.named)
-    return bin_to_res_userdata (wrbfd, data, length);
+    return bin_to_res_userdata (data, length, big_endian);
   else
     {
       switch (type.u.id)
 	{
 	default:
-	  return bin_to_res_userdata (wrbfd, data, length);
+	  return bin_to_res_userdata (data, length, big_endian);
 	case RT_CURSOR:
-	  return bin_to_res_cursor (wrbfd, data, length);
+	  return bin_to_res_cursor (data, length, big_endian);
 	case RT_BITMAP:
-	  return bin_to_res_generic (wrbfd, RES_TYPE_BITMAP, data, length);
+	  return bin_to_res_generic (RES_TYPE_BITMAP, data, length);
 	case RT_ICON:
-	  return bin_to_res_generic (wrbfd, RES_TYPE_ICON, data, length);
+	  return bin_to_res_generic (RES_TYPE_ICON, data, length);
 	case RT_MENU:
-	  return bin_to_res_menu (wrbfd, data, length);
+	  return bin_to_res_menu (data, length, big_endian);
 	case RT_DIALOG:
-	  return bin_to_res_dialog (wrbfd, data, length);
+	  return bin_to_res_dialog (data, length, big_endian);
 	case RT_STRING:
-	  return bin_to_res_string (wrbfd, data, length);
+	  return bin_to_res_string (data, length, big_endian);
 	case RT_FONTDIR:
-	  return bin_to_res_fontdir (wrbfd, data, length);
+	  return bin_to_res_fontdir (data, length, big_endian);
 	case RT_FONT:
-	  return bin_to_res_generic (wrbfd, RES_TYPE_FONT, data, length);
+	  return bin_to_res_generic (RES_TYPE_FONT, data, length);
 	case RT_ACCELERATOR:
-	  return bin_to_res_accelerators (wrbfd, data, length);
+	  return bin_to_res_accelerators (data, length, big_endian);
 	case RT_RCDATA:
-	  return bin_to_res_rcdata (wrbfd, data, length, RES_TYPE_RCDATA);
+	  return bin_to_res_rcdata (data, length, big_endian);
 	case RT_MESSAGETABLE:
-	  return bin_to_res_generic (wrbfd, RES_TYPE_MESSAGETABLE, data, length);
+	  return bin_to_res_generic (RES_TYPE_MESSAGETABLE, data, length);
 	case RT_GROUP_CURSOR:
-	  return bin_to_res_group_cursor (wrbfd, data, length);
+	  return bin_to_res_group_cursor (data, length, big_endian);
 	case RT_GROUP_ICON:
-	  return bin_to_res_group_icon (wrbfd, data, length);
+	  return bin_to_res_group_icon (data, length, big_endian);
 	case RT_VERSION:
-	  return bin_to_res_version (wrbfd, data, length);
-	case RT_TOOLBAR:
-	  return  bin_to_res_toolbar (wrbfd, data, length);
-
+	  return bin_to_res_version (data, length, big_endian);
 	}
     }
 }
@@ -115,7 +124,8 @@ bin_to_res (windres_bfd *wrbfd, rc_res_id type, const bfd_byte *data,
 /* Give an error if the binary data is too small.  */
 
 static void
-toosmall (const char *msg)
+toosmall (msg)
+     const char *msg;
 {
   fatal (_("%s: not enough binary data"), msg);
 }
@@ -123,18 +133,21 @@ toosmall (const char *msg)
 /* Swap in a NULL terminated unicode string.  */
 
 static unichar *
-get_unicode (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type length,
-	     rc_uint_type *retlen)
+get_unicode (data, length, big_endian, retlen)
+     const unsigned char *data;
+     unsigned long length;
+     int big_endian;
+     int *retlen;
 {
-  rc_uint_type c, i;
+  int c, i;
   unichar *ret;
 
   c = 0;
   while (1)
     {
-      if (length < c * 2 + 2)
+      if (length < (unsigned long) c * 2 + 2)
 	toosmall (_("null terminated unicode string"));
-      if (windres_get_16 (wrbfd, data + c * 2, 2) == 0)
+      if (get_16 (big_endian, data + c * 2) == 0)
 	break;
       ++c;
     }
@@ -142,7 +155,7 @@ get_unicode (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type length,
   ret = (unichar *) res_alloc ((c + 1) * sizeof (unichar));
 
   for (i = 0; i < c; i++)
-    ret[i] = windres_get_16 (wrbfd, data + i * 2, 2);
+    ret[i] = get_16 (big_endian, data + i * 2);
   ret[i] = 0;
 
   if (retlen != NULL)
@@ -154,27 +167,30 @@ get_unicode (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type length,
 /* Get a resource identifier.  This returns the number of bytes used.  */
 
 static int
-get_resid (windres_bfd *wrbfd, rc_res_id *id, const bfd_byte *data,
-	   rc_uint_type length)
+get_resid (id, data, length, big_endian)
+     struct res_id *id;
+     const unsigned char *data;
+     unsigned long length;
+     int big_endian;
 {
-  rc_uint_type first;
+  int first;
 
   if (length < 2)
     toosmall (_("resource ID"));
 
-  first = windres_get_16 (wrbfd, data, 2);
+  first = get_16 (big_endian, data);
   if (first == 0xffff)
     {
       if (length < 4)
 	toosmall (_("resource ID"));
       id->named = 0;
-      id->u.id = windres_get_16 (wrbfd, data + 2, 2);
+      id->u.id = get_16 (big_endian, data + 2);
       return 4;
     }
   else
     {
       id->named = 1;
-      id->u.n.name = get_unicode (wrbfd, data, length, &id->u.n.length);
+      id->u.n.name = get_unicode (data, length, big_endian, &id->u.n.length);
       return id->u.n.length * 2 + 2;
     }
 }
@@ -182,13 +198,15 @@ get_resid (windres_bfd *wrbfd, rc_res_id *id, const bfd_byte *data,
 /* Convert a resource which just stores uninterpreted data from
    binary.  */
 
-rc_res_resource *
-bin_to_res_generic (windres_bfd *wrbfd ATTRIBUTE_UNUSED, enum rc_res_type type,
-		    const bfd_byte *data, rc_uint_type length)
+struct res_resource *
+bin_to_res_generic (type, data, length)
+     enum res_type type;
+     const unsigned char *data;
+     unsigned long length;
 {
-  rc_res_resource *r;
+  struct res_resource *r;
 
-  r = (rc_res_resource *) res_alloc (sizeof (rc_res_resource));
+  r = (struct res_resource *) res_alloc (sizeof *r);
   r->type = type;
   r->u.data.data = data;
   r->u.data.length = length;
@@ -198,22 +216,25 @@ bin_to_res_generic (windres_bfd *wrbfd ATTRIBUTE_UNUSED, enum rc_res_type type,
 
 /* Convert a cursor resource from binary.  */
 
-rc_res_resource *
-bin_to_res_cursor (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type length)
+struct res_resource *
+bin_to_res_cursor (data, length, big_endian)
+     const unsigned char *data;
+     unsigned long length;
+     int big_endian;
 {
-  rc_cursor *c;
-  rc_res_resource *r;
+  struct cursor *c;
+  struct res_resource *r;
 
   if (length < 4)
     toosmall (_("cursor"));
 
-  c = (rc_cursor *) res_alloc (sizeof (rc_cursor));
-  c->xhotspot = windres_get_16 (wrbfd, data, 2);
-  c->yhotspot = windres_get_16 (wrbfd, data + 2, 2);
+  c = (struct cursor *) res_alloc (sizeof *c);
+  c->xhotspot = get_16 (big_endian, data);
+  c->yhotspot = get_16 (big_endian, data + 2);
   c->length = length - 4;
   c->data = data + 4;
 
-  r = (rc_res_resource *) res_alloc (sizeof *r);
+  r = (struct res_resource *) res_alloc (sizeof *r);
   r->type = RES_TYPE_CURSOR;
   r->u.cursor = c;
 
@@ -222,57 +243,66 @@ bin_to_res_cursor (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type length
 
 /* Convert a menu resource from binary.  */
 
-rc_res_resource *
-bin_to_res_menu (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type length)
+struct res_resource *
+bin_to_res_menu (data, length, big_endian)
+     const unsigned char *data;
+     unsigned long length;
+     int big_endian;
 {
-  rc_res_resource *r;
-  rc_menu *m;
-  rc_uint_type version, read;
+  struct res_resource *r;
+  struct menu *m;
+  int version, read;
 
-  r = (rc_res_resource *) res_alloc (sizeof *r);
+  r = (struct res_resource *) res_alloc (sizeof *r);
   r->type = RES_TYPE_MENU;
 
-  m = (rc_menu *) res_alloc (sizeof (rc_menu));
+  m = (struct menu *) res_alloc (sizeof *m);
   r->u.menu = m;
 
   if (length < 2)
     toosmall (_("menu header"));
 
-  version = windres_get_16 (wrbfd, data, 2);
+  version = get_16 (big_endian, data);
 
   if (version == 0)
     {
       if (length < 4)
 	toosmall (_("menu header"));
       m->help = 0;
-      m->items = bin_to_res_menuitems (wrbfd, data + 4, length - 4, &read);
+      m->items = bin_to_res_menuitems (data + 4, length - 4, big_endian,
+				       &read);
     }
   else if (version == 1)
     {
-      rc_uint_type offset;
+      unsigned int offset;
 
       if (length < 8)
 	toosmall (_("menuex header"));
-      m->help = windres_get_32 (wrbfd, data + 4, 4);
-      offset = windres_get_16 (wrbfd, data + 2, 2);
+      m->help = get_32 (big_endian, data + 4);
+      offset = get_16 (big_endian, data + 2);
       if (offset + 4 >= length)
 	toosmall (_("menuex offset"));
-      m->items = bin_to_res_menuexitems (wrbfd, data + 4 + offset,
-					 length - (4 + offset), &read);
+      m->items = bin_to_res_menuexitems (data + 4 + offset,
+					 length - (4 + offset),
+					 big_endian,
+					 &read);
     }
   else
-    fatal (_("unsupported menu version %d"), (int) version);
+    fatal (_("unsupported menu version %d"), version);
 
   return r;
 }
 
 /* Convert menu items from binary.  */
 
-static rc_menuitem *
-bin_to_res_menuitems (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type length,
-		      rc_uint_type *read)
+static struct menuitem *
+bin_to_res_menuitems (data, length, big_endian, read)
+     const unsigned char *data;
+     unsigned long length;
+     int big_endian;
+     int *read;
 {
-  rc_menuitem *first, **pp;
+  struct menuitem *first, **pp;
 
   first = NULL;
   pp = &first;
@@ -281,18 +311,18 @@ bin_to_res_menuitems (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type len
 
   while (length > 0)
     {
-      rc_uint_type flags, slen, itemlen;
-      rc_uint_type stroff;
-      rc_menuitem *mi;
+      int flags, slen, itemlen;
+      unsigned int stroff;
+      struct menuitem *mi;
 
       if (length < 4)
 	toosmall (_("menuitem header"));
 
-      mi = (rc_menuitem *) res_alloc (sizeof *mi);
+      mi = (struct menuitem *) res_alloc (sizeof *mi);
       mi->state = 0;
       mi->help = 0;
 
-      flags = windres_get_16 (wrbfd, data, 2);
+      flags = get_16 (big_endian, data);
       mi->type = flags &~ (MENUITEM_POPUP | MENUITEM_ENDMENU);
 
       if ((flags & MENUITEM_POPUP) == 0)
@@ -303,28 +333,29 @@ bin_to_res_menuitems (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type len
       if (length < stroff + 2)
 	toosmall (_("menuitem header"));
 
-      if (windres_get_16 (wrbfd, data + stroff, 2) == 0)
+      if (get_16 (big_endian, data + stroff) == 0)
 	{
 	  slen = 0;
 	  mi->text = NULL;
 	}
       else
-	mi->text = get_unicode (wrbfd, data + stroff, length - stroff, &slen);
+	mi->text = get_unicode (data + stroff, length - stroff, big_endian,
+				&slen);
 
       itemlen = stroff + slen * 2 + 2;
 
       if ((flags & MENUITEM_POPUP) == 0)
 	{
 	  mi->popup = NULL;
-	  mi->id = windres_get_16 (wrbfd, data + 2, 2);
+	  mi->id = get_16 (big_endian, data + 2);
 	}
       else
 	{
-	  rc_uint_type subread;
+	  int subread;
 
 	  mi->id = 0;
-	  mi->popup = bin_to_res_menuitems (wrbfd, data + itemlen, length - itemlen,
-	  				    &subread);
+	  mi->popup = bin_to_res_menuitems (data + itemlen, length - itemlen,
+					    big_endian, &subread);
 	  itemlen += subread;
 	}
 
@@ -345,11 +376,14 @@ bin_to_res_menuitems (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type len
 
 /* Convert menuex items from binary.  */
 
-static rc_menuitem *
-bin_to_res_menuexitems (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type length,
-			rc_uint_type *read)
+static struct menuitem *
+bin_to_res_menuexitems (data, length, big_endian, read)
+     const unsigned char *data;
+     unsigned long length;
+     int big_endian;
+     int *read;
 {
-  rc_menuitem *first, **pp;
+  struct menuitem *first, **pp;
 
   first = NULL;
   pp = &first;
@@ -358,29 +392,29 @@ bin_to_res_menuexitems (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type l
 
   while (length > 0)
     {
-      rc_uint_type flags, slen;
-      rc_uint_type itemlen;
-      rc_menuitem *mi;
+      int flags, slen;
+      unsigned int itemlen;
+      struct menuitem *mi;
 
-      if (length < 16)
+      if (length < 14)
 	toosmall (_("menuitem header"));
 
-      mi = (rc_menuitem *) res_alloc (sizeof (rc_menuitem));
-      mi->type = windres_get_32 (wrbfd, data, 4);
-      mi->state = windres_get_32 (wrbfd, data + 4, 4);
-      mi->id = windres_get_32 (wrbfd, data + 8, 4);
+      mi = (struct menuitem *) res_alloc (sizeof *mi);
+      mi->type = get_32 (big_endian, data);
+      mi->state = get_32 (big_endian, data + 4);
+      mi->id = get_16 (big_endian, data + 8);
 
-      flags = windres_get_16 (wrbfd, data + 12, 2);
+      flags = get_16 (big_endian, data + 10);
 
-      if (windres_get_16 (wrbfd, data + 14, 2) == 0)
+      if (get_16 (big_endian, data + 12) == 0)
 	{
 	  slen = 0;
 	  mi->text = NULL;
 	}
       else
-	mi->text = get_unicode (wrbfd, data + 14, length - 14, &slen);
+	mi->text = get_unicode (data + 12, length - 12, big_endian, &slen);
 
-      itemlen = 14 + slen * 2 + 2;
+      itemlen = 12 + slen * 2 + 2;
       itemlen = (itemlen + 3) &~ 3;
 
       if ((flags & 1) == 0)
@@ -390,15 +424,16 @@ bin_to_res_menuexitems (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type l
 	}
       else
 	{
-	  rc_uint_type subread;
+	  int subread;
 
 	  if (length < itemlen + 4)
 	    toosmall (_("menuitem"));
-	  mi->help = windres_get_32 (wrbfd, data + itemlen, 4);
+	  mi->help = get_32 (big_endian, data + itemlen);
 	  itemlen += 4;
 
-	  mi->popup = bin_to_res_menuexitems (wrbfd, data + itemlen,
-					      length - itemlen, &subread);
+	  mi->popup = bin_to_res_menuexitems (data + itemlen,
+					      length - itemlen,
+					      big_endian, &subread);
 	  itemlen += subread;
 	}
 
@@ -419,65 +454,66 @@ bin_to_res_menuexitems (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type l
 
 /* Convert a dialog resource from binary.  */
 
-static rc_res_resource *
-bin_to_res_dialog (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type length)
+static struct res_resource *
+bin_to_res_dialog (data, length, big_endian)
+     const unsigned char *data;
+     unsigned long length;
+     int big_endian;
 {
-  rc_uint_type signature;
-  rc_dialog *d;
-  rc_uint_type c, sublen, i;
-  rc_uint_type off;
-  rc_dialog_control **pp;
-  rc_res_resource *r;
+  int version;
+  struct dialog *d;
+  int c, sublen, i;
+  unsigned int off;
+  struct dialog_control **pp;
+  struct res_resource *r;
 
   if (length < 18)
     toosmall (_("dialog header"));
 
-  d = (rc_dialog *) res_alloc (sizeof (rc_dialog));
+  d = (struct dialog *) res_alloc (sizeof *d);
 
-  signature = windres_get_16 (wrbfd, data + 2, 2);
-  if (signature != 0xffff)
+  version = get_16 (big_endian, data);
+  if (version != 1)
     {
       d->ex = NULL;
-      d->style = windres_get_32 (wrbfd, data, 4);
-      d->exstyle = windres_get_32 (wrbfd, data + 4, 4);
+      d->style = get_32 (big_endian, data);
+      d->exstyle = get_32 (big_endian, data + 4);
       off = 8;
     }
   else
     {
-      int version;
+      int signature;
 
-      version = windres_get_16 (wrbfd, data, 2);
-      if (version != 1)
-	fatal (_("unexpected DIALOGEX version %d"), version);
+      signature = get_16 (big_endian, data + 2);
+      if (signature != 0xffff)
+	fatal (_("unexpected dialog signature %d"), signature);
 
-      d->ex = (rc_dialog_ex *) res_alloc (sizeof (rc_dialog_ex));
-      d->ex->help = windres_get_32 (wrbfd, data + 4, 4);
-      d->exstyle = windres_get_32 (wrbfd, data + 8, 4);
-      d->style = windres_get_32 (wrbfd, data + 12, 4);
+      d->ex = (struct dialog_ex *) res_alloc (sizeof (struct dialog_ex));
+      d->ex->help = get_32 (big_endian, data + 4);
+      d->exstyle = get_32 (big_endian, data + 8);
+      d->style = get_32 (big_endian, data + 12);
       off = 16;
     }
 
   if (length < off + 10)
     toosmall (_("dialog header"));
 
-  c = windres_get_16 (wrbfd, data + off, 2);
-  d->x = windres_get_16 (wrbfd, data + off + 2, 2);
-  d->y = windres_get_16 (wrbfd, data + off + 4, 2);
-  d->width = windres_get_16 (wrbfd, data + off + 6, 2);
-  d->height = windres_get_16 (wrbfd, data + off + 8, 2);
+  c = get_16 (big_endian, data + off);
+  d->x = get_16  (big_endian, data + off + 2);
+  d->y = get_16 (big_endian, data + off + 4);
+  d->width = get_16 (big_endian, data + off + 6);
+  d->height = get_16 (big_endian, data + off + 8);
 
   off += 10;
 
-  sublen = get_resid (wrbfd, &d->menu, data + off, length - off);
+  sublen = get_resid (&d->menu, data + off, length - off, big_endian);
   off += sublen;
 
-  sublen = get_resid (wrbfd, &d->class, data + off, length - off);
+  sublen = get_resid (&d->class, data + off, length - off, big_endian);
   off += sublen;
 
-  d->caption = get_unicode (wrbfd, data + off, length - off, &sublen);
+  d->caption = get_unicode (data + off, length - off, big_endian, &sublen);
   off += sublen * 2 + 2;
-  if (sublen == 0)
-    d->caption = NULL;
 
   if ((d->style & DS_SETFONT) == 0)
     {
@@ -487,7 +523,6 @@ bin_to_res_dialog (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type length
 	{
 	  d->ex->weight = 0;
 	  d->ex->italic = 0;
-	  d->ex->charset = 1; /* Default charset.  */
 	}
     }
   else
@@ -495,20 +530,19 @@ bin_to_res_dialog (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type length
       if (length < off + 2)
 	toosmall (_("dialog font point size"));
 
-      d->pointsize = windres_get_16 (wrbfd, data + off, 2);
+      d->pointsize = get_16 (big_endian, data + off);
       off += 2;
 
       if (d->ex != NULL)
 	{
 	  if (length < off + 4)
 	    toosmall (_("dialogex font information"));
-	  d->ex->weight = windres_get_16 (wrbfd, data + off, 2);
-	  d->ex->italic = windres_get_8 (wrbfd, data + off + 2, 1);
-	  d->ex->charset = windres_get_8 (wrbfd, data + off + 3, 1);
+	  d->ex->weight = get_16 (big_endian, data + off);
+	  d->ex->italic = get_16 (big_endian, data + off + 2);
 	  off += 4;
 	}
 
-      d->font = get_unicode (wrbfd, data + off, length - off, &sublen);
+      d->font = get_unicode (data + off, length - off, big_endian, &sublen);
       off += sublen * 2 + 2;
     }
 
@@ -517,20 +551,20 @@ bin_to_res_dialog (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type length
 
   for (i = 0; i < c; i++)
     {
-      rc_dialog_control *dc;
+      struct dialog_control *dc;
       int datalen;
 
       off = (off + 3) &~ 3;
 
-      dc = (rc_dialog_control *) res_alloc (sizeof (rc_dialog_control));
+      dc = (struct dialog_control *) res_alloc (sizeof *dc);
 
       if (d->ex == NULL)
 	{
 	  if (length < off + 8)
 	    toosmall (_("dialog control"));
 
-	  dc->style = windres_get_32 (wrbfd, data + off, 4);
-	  dc->exstyle = windres_get_32 (wrbfd, data + off + 4, 4);
+	  dc->style = get_32 (big_endian, data + off);
+	  dc->exstyle = get_32 (big_endian, data + off + 4);
 	  dc->help = 0;
 	  off += 8;
 	}
@@ -538,37 +572,37 @@ bin_to_res_dialog (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type length
 	{
 	  if (length < off + 12)
 	    toosmall (_("dialogex control"));
-	  dc->help = windres_get_32 (wrbfd, data + off, 4);
-	  dc->exstyle = windres_get_32 (wrbfd, data + off + 4, 4);
-	  dc->style = windres_get_32 (wrbfd, data + off + 8, 4);
+	  dc->help = get_32 (big_endian, data + off);
+	  dc->exstyle = get_32 (big_endian, data + off + 4);
+	  dc->style = get_32 (big_endian, data + off + 8);
 	  off += 12;
 	}
 
-      if (length < off + (d->ex != NULL ? 2 : 0) + 10)
+      if (length < off + 10)
 	toosmall (_("dialog control"));
 
-      dc->x = windres_get_16 (wrbfd, data + off, 2);
-      dc->y = windres_get_16 (wrbfd, data + off + 2, 2);
-      dc->width = windres_get_16 (wrbfd, data + off + 4, 2);
-      dc->height = windres_get_16 (wrbfd, data + off + 6, 2);
+      dc->x = get_16 (big_endian, data + off);
+      dc->y = get_16 (big_endian, data + off + 2);
+      dc->width = get_16 (big_endian, data + off + 4);
+      dc->height = get_16 (big_endian, data + off + 6);
 
       if (d->ex != NULL)
-	dc->id = windres_get_32 (wrbfd, data + off + 8, 4);
+        dc->id = get_32 (big_endian, data + off + 8);
       else
-	dc->id = windres_get_16 (wrbfd, data + off + 8, 2);
+        dc->id = get_16 (big_endian, data + off + 8);
 
       off += 10 + (d->ex != NULL ? 2 : 0);
 
-      sublen = get_resid (wrbfd, &dc->class, data + off, length - off);
+      sublen = get_resid (&dc->class, data + off, length - off, big_endian);
       off += sublen;
 
-      sublen = get_resid (wrbfd, &dc->text, data + off, length - off);
+      sublen = get_resid (&dc->text, data + off, length - off, big_endian);
       off += sublen;
 
       if (length < off + 2)
 	toosmall (_("dialog control end"));
 
-      datalen = windres_get_16 (wrbfd, data + off, 2);
+      datalen = get_16 (big_endian, data + off);
       off += 2;
 
       if (datalen == 0)
@@ -580,14 +614,14 @@ bin_to_res_dialog (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type length
 	  if (length < off + datalen)
 	    toosmall (_("dialog control data"));
 
-	  dc->data = ((rc_rcdata_item *)
-		      res_alloc (sizeof (rc_rcdata_item)));
+	  dc->data = ((struct rcdata_item *)
+		      res_alloc (sizeof (struct rcdata_item)));
 	  dc->data->next = NULL;
 	  dc->data->type = RCDATA_BUFFER;
 	  dc->data->u.buffer.length = datalen;
 	  dc->data->u.buffer.data = data + off;
 
-	  off += datalen;
+	  off += datalen;	  
 	}
 
       dc->next = NULL;
@@ -595,7 +629,7 @@ bin_to_res_dialog (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type length
       pp = &dc->next;
     }
 
-  r = (rc_res_resource *) res_alloc (sizeof *r);
+  r = (struct res_resource *) res_alloc (sizeof *r);
   r->type = RES_TYPE_DIALOG;
   r->u.dialog = d;
 
@@ -604,14 +638,17 @@ bin_to_res_dialog (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type length
 
 /* Convert a stringtable resource from binary.  */
 
-static rc_res_resource *
-bin_to_res_string (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type length)
+static struct res_resource *
+bin_to_res_string (data, length, big_endian)
+     const unsigned char *data;
+     unsigned long length;
+     int big_endian;
 {
-  rc_stringtable *st;
+  struct stringtable *st;
   int i;
-  rc_res_resource *r;
+  struct res_resource *r;
 
-  st = (rc_stringtable *) res_alloc (sizeof (rc_stringtable));
+  st = (struct stringtable *) res_alloc (sizeof *st);
 
   for (i = 0; i < 16; i++)
     {
@@ -619,7 +656,7 @@ bin_to_res_string (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type length
 
       if (length < 2)
 	toosmall (_("stringtable string length"));
-      slen = windres_get_16 (wrbfd, data, 2);
+      slen = get_16 (big_endian, data);
       st->strings[i].length = slen;
 
       if (slen > 0)
@@ -634,14 +671,14 @@ bin_to_res_string (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type length
 	  st->strings[i].string = s;
 
 	  for (j = 0; j < slen; j++)
-	    s[j] = windres_get_16 (wrbfd, data + 2 + j * 2, 2);
+	    s[j] = get_16 (big_endian, data + 2 + j * 2);
 	}
 
       data += 2 + 2 * slen;
       length -= 2 + 2 * slen;
     }
 
-  r = (rc_res_resource *) res_alloc (sizeof *r);
+  r = (struct res_resource *) res_alloc (sizeof *r);
   r->type = RES_TYPE_STRINGTABLE;
   r->u.stringtable = st;
 
@@ -650,37 +687,38 @@ bin_to_res_string (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type length
 
 /* Convert a fontdir resource from binary.  */
 
-static rc_res_resource *
-bin_to_res_fontdir (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type length)
+static struct res_resource *
+bin_to_res_fontdir (data, length, big_endian)
+     const unsigned char *data;
+     unsigned long length;
+     int big_endian;
 {
-  rc_uint_type c, i;
-  rc_fontdir *first, **pp;
-  rc_res_resource *r;
+  int c, i;
+  struct fontdir *first, **pp;
+  struct res_resource *r;
 
   if (length < 2)
     toosmall (_("fontdir header"));
 
-  c = windres_get_16 (wrbfd, data, 2);
+  c = get_16 (big_endian, data);
 
   first = NULL;
   pp = &first;
 
   for (i = 0; i < c; i++)
     {
-      const struct bin_fontdir_item *bfi;
-      rc_fontdir *fd;
+      struct fontdir *fd;
       unsigned int off;
 
       if (length < 56)
 	toosmall (_("fontdir"));
 
-      bfi = (const struct bin_fontdir_item *) data;
-      fd = (rc_fontdir *) res_alloc (sizeof *fd);
-      fd->index = windres_get_16 (wrbfd, bfi->index, 2);
+      fd = (struct fontdir *) res_alloc (sizeof *fd);
+      fd->index = get_16 (big_endian, data);
 
       /* To work out the length of the fontdir data, we must get the
          length of the device name and face name strings, even though
-         we don't store them in the rc_fontdir.  The
+         we don't store them in the fontdir structure.  The
          documentation says that these are NULL terminated char
          strings, not Unicode strings.  */
 
@@ -712,7 +750,7 @@ bin_to_res_fontdir (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type lengt
       length -= off;
     }
 
-  r = (rc_res_resource *) res_alloc (sizeof *r);
+  r = (struct res_resource *) res_alloc (sizeof *r);
   r->type = RES_TYPE_FONTDIR;
   r->u.fontdir = first;
 
@@ -721,27 +759,30 @@ bin_to_res_fontdir (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type lengt
 
 /* Convert an accelerators resource from binary.  */
 
-static rc_res_resource *
-bin_to_res_accelerators (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type length)
+static struct res_resource *
+bin_to_res_accelerators (data, length, big_endian)
+     const unsigned char *data;
+     unsigned long length;
+     int big_endian;
 {
-  rc_accelerator *first, **pp;
-  rc_res_resource *r;
+  struct accelerator *first, **pp;
+  struct res_resource *r;
 
   first = NULL;
   pp = &first;
 
   while (1)
     {
-      rc_accelerator *a;
+      struct accelerator *a;
 
       if (length < 8)
 	toosmall (_("accelerator"));
 
-      a = (rc_accelerator *) res_alloc (sizeof (rc_accelerator));
+      a = (struct accelerator *) res_alloc (sizeof *a);
 
-      a->flags = windres_get_16 (wrbfd, data, 2);
-      a->key = windres_get_16 (wrbfd, data + 2, 2);
-      a->id = windres_get_16 (wrbfd, data + 4, 2);
+      a->flags = get_16 (big_endian, data);
+      a->key = get_16 (big_endian, data + 2);
+      a->id = get_16 (big_endian, data + 4);
 
       a->next = NULL;
       *pp = a;
@@ -754,7 +795,7 @@ bin_to_res_accelerators (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type 
       length -= 8;
     }
 
-  r = (rc_res_resource *) res_alloc (sizeof (rc_res_resource));
+  r = (struct res_resource *) res_alloc (sizeof *r);
   r->type = RES_TYPE_ACCELERATOR;
   r->u.acc = first;
 
@@ -763,22 +804,24 @@ bin_to_res_accelerators (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type 
 
 /* Convert an rcdata resource from binary.  */
 
-static rc_res_resource *
-bin_to_res_rcdata (windres_bfd *wrbfd ATTRIBUTE_UNUSED, const bfd_byte *data,
-		   rc_uint_type length, int rctyp)
+static struct res_resource *
+bin_to_res_rcdata (data, length, big_endian)
+     const unsigned char *data;
+     unsigned long length;
+     int big_endian;
 {
-  rc_rcdata_item *ri;
-  rc_res_resource *r;
+  struct rcdata_item *ri;
+  struct res_resource *r;
 
-  ri = (rc_rcdata_item *) res_alloc (sizeof (rc_rcdata_item));
+  ri = (struct rcdata_item *) res_alloc (sizeof *ri);
 
   ri->next = NULL;
   ri->type = RCDATA_BUFFER;
   ri->u.buffer.length = length;
   ri->u.buffer.data = data;
 
-  r = (rc_res_resource *) res_alloc (sizeof *r);
-  r->type = rctyp;
+  r = (struct res_resource *) res_alloc (sizeof *r);
+  r->type = RES_TYPE_RCDATA;
   r->u.rcdata = ri;
 
   return r;
@@ -786,21 +829,24 @@ bin_to_res_rcdata (windres_bfd *wrbfd ATTRIBUTE_UNUSED, const bfd_byte *data,
 
 /* Convert a group cursor resource from binary.  */
 
-static rc_res_resource *
-bin_to_res_group_cursor (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type length)
+static struct res_resource *
+bin_to_res_group_cursor (data, length, big_endian)
+     const unsigned char *data;
+     unsigned long length;
+     int big_endian;
 {
   int type, c, i;
-  rc_group_cursor *first, **pp;
-  rc_res_resource *r;
+  struct group_cursor *first, **pp;
+  struct res_resource *r;
 
   if (length < 6)
     toosmall (_("group cursor header"));
 
-  type = windres_get_16 (wrbfd, data + 2, 2);
+  type = get_16 (big_endian, data + 2);
   if (type != 2)
     fatal (_("unexpected group cursor type %d"), type);
 
-  c = windres_get_16 (wrbfd, data + 4, 2);
+  c = get_16 (big_endian, data + 4);
 
   data += 6;
   length -= 6;
@@ -810,19 +856,19 @@ bin_to_res_group_cursor (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type 
 
   for (i = 0; i < c; i++)
     {
-      rc_group_cursor *gc;
+      struct group_cursor *gc;
 
       if (length < 14)
 	toosmall (_("group cursor"));
 
-      gc = (rc_group_cursor *) res_alloc (sizeof *gc);
+      gc = (struct group_cursor *) res_alloc (sizeof *gc);
 
-      gc->width = windres_get_16 (wrbfd, data, 2);
-      gc->height = windres_get_16 (wrbfd, data + 2, 2);
-      gc->planes = windres_get_16 (wrbfd, data + 4, 2);
-      gc->bits = windres_get_16 (wrbfd, data + 6, 2);
-      gc->bytes = windres_get_32 (wrbfd, data + 8, 4);
-      gc->index = windres_get_16 (wrbfd, data + 12, 2);
+      gc->width = get_16 (big_endian, data);
+      gc->height = get_16 (big_endian, data + 2);
+      gc->planes = get_16 (big_endian, data + 4);
+      gc->bits = get_16 (big_endian, data + 6);
+      gc->bytes = get_32 (big_endian, data + 8);
+      gc->index = get_16 (big_endian, data + 12);
 
       gc->next = NULL;
       *pp = gc;
@@ -832,7 +878,7 @@ bin_to_res_group_cursor (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type 
       length -= 14;
     }
 
-  r = (rc_res_resource *) res_alloc (sizeof (rc_res_resource));
+  r = (struct res_resource *) res_alloc (sizeof *r);
   r->type = RES_TYPE_GROUP_CURSOR;
   r->u.group_cursor = first;
 
@@ -841,21 +887,24 @@ bin_to_res_group_cursor (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type 
 
 /* Convert a group icon resource from binary.  */
 
-static rc_res_resource *
-bin_to_res_group_icon (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type length)
+static struct res_resource *
+bin_to_res_group_icon (data, length, big_endian)
+     const unsigned char *data;
+     unsigned long length;
+     int big_endian;
 {
   int type, c, i;
-  rc_group_icon *first, **pp;
-  rc_res_resource *r;
+  struct group_icon *first, **pp;
+  struct res_resource *r;
 
   if (length < 6)
     toosmall (_("group icon header"));
 
-  type = windres_get_16 (wrbfd, data + 2, 2);
+  type = get_16 (big_endian, data + 2);
   if (type != 1)
     fatal (_("unexpected group icon type %d"), type);
 
-  c = windres_get_16 (wrbfd, data + 4, 2);
+  c = get_16 (big_endian, data + 4);
 
   data += 6;
   length -= 6;
@@ -865,20 +914,20 @@ bin_to_res_group_icon (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type le
 
   for (i = 0; i < c; i++)
     {
-      rc_group_icon *gi;
+      struct group_icon *gi;
 
       if (length < 14)
 	toosmall (_("group icon"));
 
-      gi = (rc_group_icon *) res_alloc (sizeof (rc_group_icon));
+      gi = (struct group_icon *) res_alloc (sizeof *gi);
 
-      gi->width = windres_get_8 (wrbfd, data, 1);
-      gi->height = windres_get_8 (wrbfd, data + 1, 1);
-      gi->colors = windres_get_8 (wrbfd, data + 2, 1);
-      gi->planes = windres_get_16 (wrbfd, data + 4, 2);
-      gi->bits = windres_get_16 (wrbfd, data + 6, 2);
-      gi->bytes = windres_get_32 (wrbfd, data + 8, 4);
-      gi->index = windres_get_16 (wrbfd, data + 12, 2);
+      gi->width = data[0];
+      gi->height = data[1];
+      gi->colors = data[2];
+      gi->planes = get_16 (big_endian, data + 4);
+      gi->bits = get_16 (big_endian, data + 6);
+      gi->bytes = get_32 (big_endian, data + 8);
+      gi->index = get_16 (big_endian, data + 12);
 
       gi->next = NULL;
       *pp = gi;
@@ -888,7 +937,7 @@ bin_to_res_group_icon (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type le
       length -= 14;
     }
 
-  r = (rc_res_resource *) res_alloc (sizeof *r);
+  r = (struct res_resource *) res_alloc (sizeof *r);
   r->type = RES_TYPE_GROUP_ICON;
   r->u.group_icon = first;
 
@@ -901,17 +950,24 @@ bin_to_res_group_icon (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type le
    to the type, and *OFF to the offset to the children.  */
 
 static void
-get_version_header (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type length,
-		    const char *key, unichar **pkey,
-		    rc_uint_type *len, rc_uint_type *vallen, rc_uint_type *type,
-		    rc_uint_type *off)
+get_version_header (data, length, big_endian, key, pkey, len, vallen, type,
+		    off)
+     const unsigned char *data;
+     unsigned long length;
+     int big_endian;
+     const char *key;
+     unichar **pkey;
+     int *len;
+     int *vallen;
+     int *type;
+     int *off;
 {
   if (length < 8)
     toosmall (key);
 
-  *len = windres_get_16 (wrbfd, data, 2);
-  *vallen = windres_get_16 (wrbfd, data + 2, 2);
-  *type = windres_get_16 (wrbfd, data + 4, 2);
+  *len = get_16 (big_endian, data);
+  *vallen = get_16 (big_endian, data + 2);
+  *type = get_16 (big_endian, data + 4);
 
   *off = 6;
 
@@ -920,10 +976,10 @@ get_version_header (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type lengt
 
   if (key == NULL)
     {
-      rc_uint_type sublen;
+      int sublen;
 
-      *pkey = get_unicode (wrbfd, data, length, &sublen);
-      *off += (sublen + 1) * sizeof (unichar);
+      *pkey = get_unicode (data, length, big_endian, &sublen);
+      *off += sublen * 2 + 2;
     }
   else
     {
@@ -931,7 +987,7 @@ get_version_header (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type lengt
 	{
 	  if (length < 2)
 	    toosmall (key);
-	  if (windres_get_16 (wrbfd, data, 2) != (bfd_byte) *key)
+	  if (get_16 (big_endian, data) != (unsigned char) *key)
 	    fatal (_("unexpected version string"));
 
 	  *off += 2;
@@ -950,24 +1006,27 @@ get_version_header (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type lengt
 
 /* Convert a version resource from binary.  */
 
-static rc_res_resource *
-bin_to_res_version (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type length)
+static struct res_resource *
+bin_to_res_version (data, length, big_endian)
+     const unsigned char *data;
+     unsigned long length;
+     int big_endian;
 {
-  rc_uint_type verlen, vallen, type, off;
-  rc_fixed_versioninfo *fi;
-  rc_ver_info *first, **pp;
-  rc_versioninfo *v;
-  rc_res_resource *r;
+  int verlen, vallen, type, off;
+  struct fixed_versioninfo *fi;
+  struct ver_info *first, **pp;
+  struct versioninfo *v;
+  struct res_resource *r;
 
-  get_version_header (wrbfd, data, length, "VS_VERSION_INFO",
-		      (unichar **) NULL, &verlen, &vallen, &type, &off);
+  get_version_header (data, length, big_endian, "VS_VERSION_INFO",
+		      (unichar *) NULL, &verlen, &vallen, &type, &off);
 
   if ((unsigned int) verlen != length)
     fatal (_("version length %d does not match resource length %lu"),
-	   (int) verlen, (unsigned long) length);
+	   verlen, length);
 
   if (type != 0)
-    fatal (_("unexpected version type %d"), (int) type);
+    fatal (_("unexpected version type %d"), type);
 
   data += off;
   length -= off;
@@ -979,32 +1038,32 @@ bin_to_res_version (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type lengt
       unsigned long signature, fiv;
 
       if (vallen != 52)
-	fatal (_("unexpected fixed version information length %ld"), (long) vallen);
+	fatal (_("unexpected fixed version information length %d"), vallen);
 
       if (length < 52)
 	toosmall (_("fixed version info"));
 
-      signature = windres_get_32 (wrbfd, data, 4);
+      signature = get_32 (big_endian, data);
       if (signature != 0xfeef04bd)
 	fatal (_("unexpected fixed version signature %lu"), signature);
 
-      fiv = windres_get_32 (wrbfd, data + 4, 4);
+      fiv = get_32 (big_endian, data + 4);
       if (fiv != 0 && fiv != 0x10000)
 	fatal (_("unexpected fixed version info version %lu"), fiv);
 
-      fi = (rc_fixed_versioninfo *) res_alloc (sizeof (rc_fixed_versioninfo));
+      fi = (struct fixed_versioninfo *) res_alloc (sizeof *fi);
 
-      fi->file_version_ms = windres_get_32 (wrbfd, data + 8, 4);
-      fi->file_version_ls = windres_get_32 (wrbfd, data + 12, 4);
-      fi->product_version_ms = windres_get_32 (wrbfd, data + 16, 4);
-      fi->product_version_ls = windres_get_32 (wrbfd, data + 20, 4);
-      fi->file_flags_mask = windres_get_32 (wrbfd, data + 24, 4);
-      fi->file_flags = windres_get_32 (wrbfd, data + 28, 4);
-      fi->file_os = windres_get_32 (wrbfd, data + 32, 4);
-      fi->file_type = windres_get_32 (wrbfd, data + 36, 4);
-      fi->file_subtype = windres_get_32 (wrbfd, data + 40, 4);
-      fi->file_date_ms = windres_get_32 (wrbfd, data + 44, 4);
-      fi->file_date_ls = windres_get_32 (wrbfd, data + 48, 4);
+      fi->file_version_ms = get_32 (big_endian, data + 8);
+      fi->file_version_ls = get_32 (big_endian, data + 12);
+      fi->product_version_ms = get_32 (big_endian, data + 16);
+      fi->product_version_ls = get_32 (big_endian, data + 20);
+      fi->file_flags_mask = get_32 (big_endian, data + 24);
+      fi->file_flags = get_32 (big_endian, data + 28);
+      fi->file_os = get_32 (big_endian, data + 32);
+      fi->file_type = get_32 (big_endian, data + 36);
+      fi->file_subtype = get_32 (big_endian, data + 40);
+      fi->file_date_ms = get_32 (big_endian, data + 44);
+      fi->file_date_ls = get_32 (big_endian, data + 48);
 
       data += 52;
       length -= 52;
@@ -1015,38 +1074,38 @@ bin_to_res_version (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type lengt
 
   while (length > 0)
     {
-      rc_ver_info *vi;
+      struct ver_info *vi;
       int ch;
 
       if (length < 8)
 	toosmall (_("version var info"));
 
-      vi = (rc_ver_info *) res_alloc (sizeof (rc_ver_info));
+      vi = (struct ver_info *) res_alloc (sizeof *vi);
 
-      ch = windres_get_16 (wrbfd, data + 6, 2);
+      ch = get_16 (big_endian, data + 6);
 
       if (ch == 'S')
 	{
-	  rc_ver_stringinfo **ppvs;
+	  struct ver_stringinfo **ppvs;
 
 	  vi->type = VERINFO_STRING;
 
-	  get_version_header (wrbfd, data, length, "StringFileInfo",
-			      (unichar **) NULL, &verlen, &vallen, &type,
+	  get_version_header (data, length, big_endian, "StringFileInfo",
+			      (unichar *) NULL, &verlen, &vallen, &type,
 			      &off);
 
 	  if (vallen != 0)
-	    fatal (_("unexpected stringfileinfo value length %ld"), (long) vallen);
+	    fatal (_("unexpected stringfileinfo value length %d"), vallen);
 
 	  data += off;
 	  length -= off;
 
-	  get_version_header (wrbfd, data, length, (const char *) NULL,
+	  get_version_header (data, length, big_endian, (const char *) NULL,
 			      &vi->u.string.language, &verlen, &vallen,
 			      &type, &off);
 
 	  if (vallen != 0)
-	    fatal (_("unexpected version stringtable value length %ld"), (long) vallen);
+	    fatal (_("unexpected version stringtable value length %d"), vallen);
 
 	  data += off;
 	  length -= off;
@@ -1061,12 +1120,12 @@ bin_to_res_version (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type lengt
 
 	  while (verlen > 0)
 	    {
-	      rc_ver_stringinfo *vs;
-	      rc_uint_type subverlen, vslen, valoff;
+	      struct ver_stringinfo *vs;
+	      int subverlen, vslen, valoff;
 
-	      vs = (rc_ver_stringinfo *) res_alloc (sizeof *vs);
+	      vs = (struct ver_stringinfo *) res_alloc (sizeof *vs);
 
-	      get_version_header (wrbfd, data, length,
+	      get_version_header (data, length, big_endian,
 				  (const char *) NULL, &vs->key, &subverlen,
 				  &vallen, &type, &off);
 
@@ -1075,13 +1134,13 @@ bin_to_res_version (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type lengt
 	      data += off;
 	      length -= off;
 
-	      vs->value = get_unicode (wrbfd, data, length, &vslen);
+	      vs->value = get_unicode (data, length, big_endian, &vslen);
 	      valoff = vslen * 2 + 2;
 	      valoff = (valoff + 3) &~ 3;
 
 	      if (off + valoff != subverlen)
-		fatal (_("unexpected version string length %ld != %ld + %ld"),
-		       (long) subverlen, (long) off, (long) valoff);
+		fatal (_("unexpected version string length %d != %d + %d"),
+		       subverlen, off, valoff);
 
 	      vs->next = NULL;
 	      *ppvs = vs;
@@ -1091,29 +1150,29 @@ bin_to_res_version (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type lengt
 	      length -= valoff;
 
 	      if (verlen < subverlen)
-		fatal (_("unexpected version string length %ld < %ld"),
-		       (long) verlen, (long) subverlen);
+		fatal (_("unexpected version string length %d < %d"),
+		       verlen, subverlen);
 
 	      verlen -= subverlen;
 	    }
 	}
       else if (ch == 'V')
 	{
-	  rc_ver_varinfo **ppvv;
+	  struct ver_varinfo **ppvv;
 
 	  vi->type = VERINFO_VAR;
 
-	  get_version_header (wrbfd, data, length, "VarFileInfo",
-			      (unichar **) NULL, &verlen, &vallen, &type,
+	  get_version_header (data, length, big_endian, "VarFileInfo",
+			      (unichar *) NULL, &verlen, &vallen, &type,
 			      &off);
 
 	  if (vallen != 0)
-	    fatal (_("unexpected varfileinfo value length %ld"), (long) vallen);
+	    fatal (_("unexpected varfileinfo value length %d"), vallen);
 
 	  data += off;
 	  length -= off;
 
-	  get_version_header (wrbfd, data, length, (const char *) NULL,
+	  get_version_header (data, length, big_endian, (const char *) NULL,
 			      &vi->u.var.key, &verlen, &vallen, &type, &off);
 
 	  data += off;
@@ -1124,15 +1183,15 @@ bin_to_res_version (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type lengt
 
 	  while (vallen > 0)
 	    {
-	      rc_ver_varinfo *vv;
+	      struct ver_varinfo *vv;
 
 	      if (length < 4)
 		toosmall (_("version varfileinfo"));
 
-	      vv = (rc_ver_varinfo *) res_alloc (sizeof (rc_ver_varinfo));
+	      vv = (struct ver_varinfo *) res_alloc (sizeof *vv);
 
-	      vv->language = windres_get_16 (wrbfd, data, 2);
-	      vv->charset = windres_get_16 (wrbfd, data + 2, 2);
+	      vv->language = get_16 (big_endian, data);
+	      vv->charset = get_16 (big_endian, data + 2);
 
 	      vv->next = NULL;
 	      *ppvv = vv;
@@ -1142,7 +1201,7 @@ bin_to_res_version (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type lengt
 	      length -= 4;
 
 	      if (vallen < 4)
-		fatal (_("unexpected version value length %ld"), (long) vallen);
+		fatal (_("unexpected version value length %d"), vallen);
 
 	      vallen -= 4;
 	    }
@@ -1152,565 +1211,675 @@ bin_to_res_version (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type lengt
 
       vi->next = NULL;
       *pp = vi;
-      pp = &vi->next;
+      pp = &vi->next;      
     }
 
-  v = (rc_versioninfo *) res_alloc (sizeof (rc_versioninfo));
+  v = (struct versioninfo *) res_alloc (sizeof *v);
   v->fixed = fi;
   v->var = first;
 
-  r = (rc_res_resource *) res_alloc (sizeof *r);
+  r = (struct res_resource *) res_alloc (sizeof *r);
   r->type = RES_TYPE_VERSIONINFO;
   r->u.versioninfo = v;
 
-  return r;
+  return r;  
 }
 
 /* Convert an arbitrary user defined resource from binary.  */
 
-static rc_res_resource *
-bin_to_res_userdata (windres_bfd *wrbfd ATTRIBUTE_UNUSED, const bfd_byte *data,
-		     rc_uint_type length)
+static struct res_resource *
+bin_to_res_userdata (data, length, big_endian)
+     const unsigned char *data;
+     unsigned long length;
+     int big_endian;
 {
-  rc_rcdata_item *ri;
-  rc_res_resource *r;
+  struct rcdata_item *ri;
+  struct res_resource *r;
 
-  ri = (rc_rcdata_item *) res_alloc (sizeof (rc_rcdata_item));
+  ri = (struct rcdata_item *) res_alloc (sizeof *ri);
 
   ri->next = NULL;
   ri->type = RCDATA_BUFFER;
   ri->u.buffer.length = length;
   ri->u.buffer.data = data;
 
-  r = (rc_res_resource *) res_alloc (sizeof *r);
+  r = (struct res_resource *) res_alloc (sizeof *r);
   r->type = RES_TYPE_USERDATA;
   r->u.rcdata = ri;
 
   return r;
 }
 
-static rc_res_resource *
-bin_to_res_toolbar (windres_bfd *wrbfd, const bfd_byte *data, rc_uint_type length)
-{
-  rc_toolbar *ri;
-  rc_res_resource *r;
-  rc_uint_type i;
+/* Macros to swap out values.  */
 
-  ri = (rc_toolbar *) res_alloc (sizeof (rc_toolbar));
-  ri->button_width = windres_get_32 (wrbfd, data, 4);
-  ri->button_height = windres_get_32 (wrbfd, data + 4, 4);
-  ri->nitems = windres_get_32 (wrbfd, data + 8, 4);
-  ri->items = NULL;
-
-  data += 12;
-  length -= 12;
-  for (i=0 ; i < ri->nitems; i++)
-  {
-    rc_toolbar_item *it;
-    it = (rc_toolbar_item *) res_alloc (sizeof (rc_toolbar_item));
-    it->id.named = 0;
-    it->id.u.id = (int) windres_get_32 (wrbfd, data, 4);
-    it->prev = it->next = NULL;
-    data += 4;
-    length -= 4;
-    if(ri->items) {
-      rc_toolbar_item *ii = ri->items;
-      while (ii->next != NULL)
-	ii = ii->next;
-      it->prev = ii;
-      ii->next = it;
-    }
-    else
-      ri->items = it;
-  }
-  r = (rc_res_resource *) res_alloc (sizeof *r);
-  r->type = RES_TYPE_TOOLBAR;
-  r->u.toolbar = ri;
-  return r;
-}
-
+#define put_16(be, v, s) ((be) ? bfd_putb16 ((v), (s)) : bfd_putl16 ((v), (s)))
+#define put_32(be, v, s) ((be) ? bfd_putb32 ((v), (s)) : bfd_putl32 ((v), (s)))
 
 /* Local functions used to convert resources to binary format.  */
 
-static rc_uint_type resid_to_bin (windres_bfd *, rc_uint_type, rc_res_id);
-static rc_uint_type unicode_to_bin (windres_bfd *, rc_uint_type, const unichar *);
-static rc_uint_type res_to_bin_accelerator (windres_bfd *, rc_uint_type, const rc_accelerator *);
-static rc_uint_type res_to_bin_cursor (windres_bfd *, rc_uint_type, const rc_cursor *);
-static rc_uint_type res_to_bin_group_cursor (windres_bfd *, rc_uint_type, const rc_group_cursor *);
-static rc_uint_type res_to_bin_dialog (windres_bfd *, rc_uint_type, const rc_dialog *);
-static rc_uint_type res_to_bin_fontdir (windres_bfd *, rc_uint_type, const rc_fontdir *);
-static rc_uint_type res_to_bin_group_icon (windres_bfd *, rc_uint_type, const rc_group_icon *);
-static rc_uint_type res_to_bin_menu (windres_bfd *, rc_uint_type, const rc_menu *);
-static rc_uint_type res_to_bin_menuitems (windres_bfd *, rc_uint_type, const rc_menuitem *);
-static rc_uint_type res_to_bin_menuexitems (windres_bfd *, rc_uint_type, const rc_menuitem *);
-static rc_uint_type res_to_bin_rcdata (windres_bfd *, rc_uint_type, const rc_rcdata_item *);
-static rc_uint_type res_to_bin_stringtable (windres_bfd *, rc_uint_type, const rc_stringtable *);
-static rc_uint_type string_to_unicode_bin (windres_bfd *, rc_uint_type, const char *);
-static rc_uint_type res_to_bin_toolbar (windres_bfd *, rc_uint_type, rc_toolbar *tb);
-static rc_uint_type res_to_bin_versioninfo (windres_bfd *, rc_uint_type, const rc_versioninfo *);
-static rc_uint_type res_to_bin_generic (windres_bfd *, rc_uint_type, rc_uint_type,
-					const bfd_byte *);
+static void dword_align_bin PARAMS ((struct bindata ***, unsigned long *));
+static struct bindata *resid_to_bin PARAMS ((struct res_id, int));
+static struct bindata *unicode_to_bin PARAMS ((const unichar *, int));
+static struct bindata *res_to_bin_accelerator
+  PARAMS ((const struct accelerator *, int));
+static struct bindata *res_to_bin_cursor
+  PARAMS ((const struct cursor *, int));
+static struct bindata *res_to_bin_group_cursor
+  PARAMS ((const struct group_cursor *, int));
+static struct bindata *res_to_bin_dialog
+  PARAMS ((const struct dialog *, int));
+static struct bindata *res_to_bin_fontdir
+  PARAMS ((const struct fontdir *, int));
+static struct bindata *res_to_bin_group_icon
+  PARAMS ((const struct group_icon *, int));
+static struct bindata *res_to_bin_menu
+  PARAMS ((const struct menu *, int));
+static struct bindata *res_to_bin_menuitems
+  PARAMS ((const struct menuitem *, int));
+static struct bindata *res_to_bin_menuexitems
+  PARAMS ((const struct menuitem *, int));
+static struct bindata *res_to_bin_rcdata
+  PARAMS ((const struct rcdata_item *, int));
+static struct bindata *res_to_bin_stringtable
+  PARAMS ((const struct stringtable *, int));
+static struct bindata *string_to_unicode_bin PARAMS ((const char *, int));
+static struct bindata *res_to_bin_versioninfo
+  PARAMS ((const struct versioninfo *, int));
+static struct bindata *res_to_bin_generic
+  PARAMS ((unsigned long, const unsigned char *));
 
 /* Convert a resource to binary.  */
 
-rc_uint_type
-res_to_bin (windres_bfd *wrbfd, rc_uint_type off, const rc_res_resource *res)
+struct bindata *
+res_to_bin (res, big_endian)
+     const struct res_resource *res;
+     int big_endian;
 {
   switch (res->type)
     {
+    default:
+      abort ();
     case RES_TYPE_BITMAP:
     case RES_TYPE_FONT:
     case RES_TYPE_ICON:
     case RES_TYPE_MESSAGETABLE:
-      return res_to_bin_generic (wrbfd, off, res->u.data.length, res->u.data.data);
+      return res_to_bin_generic (res->u.data.length, res->u.data.data);
     case RES_TYPE_ACCELERATOR:
-      return res_to_bin_accelerator (wrbfd, off, res->u.acc);
+      return res_to_bin_accelerator (res->u.acc, big_endian);
     case RES_TYPE_CURSOR:
-      return res_to_bin_cursor (wrbfd, off, res->u.cursor);
+      return res_to_bin_cursor (res->u.cursor, big_endian);
     case RES_TYPE_GROUP_CURSOR:
-      return res_to_bin_group_cursor (wrbfd, off, res->u.group_cursor);
+      return res_to_bin_group_cursor (res->u.group_cursor, big_endian);
     case RES_TYPE_DIALOG:
-      return res_to_bin_dialog (wrbfd, off, res->u.dialog);
+      return res_to_bin_dialog (res->u.dialog, big_endian);
     case RES_TYPE_FONTDIR:
-      return res_to_bin_fontdir (wrbfd, off, res->u.fontdir);
+      return res_to_bin_fontdir (res->u.fontdir, big_endian);
     case RES_TYPE_GROUP_ICON:
-      return res_to_bin_group_icon (wrbfd, off, res->u.group_icon);
+      return res_to_bin_group_icon (res->u.group_icon, big_endian);
     case RES_TYPE_MENU:
-      return res_to_bin_menu (wrbfd, off, res->u.menu);
-    case RES_TYPE_STRINGTABLE:
-      return res_to_bin_stringtable (wrbfd, off, res->u.stringtable);
-    case RES_TYPE_VERSIONINFO:
-      return res_to_bin_versioninfo (wrbfd, off, res->u.versioninfo);
-    case RES_TYPE_TOOLBAR:
-      return res_to_bin_toolbar (wrbfd, off, res->u.toolbar);
-    case RES_TYPE_USERDATA:
+      return res_to_bin_menu (res->u.menu, big_endian);
     case RES_TYPE_RCDATA:
-    default:
-      return res_to_bin_rcdata (wrbfd, off, res->u.rcdata);
+      return res_to_bin_rcdata (res->u.rcdata, big_endian);
+    case RES_TYPE_STRINGTABLE:
+      return res_to_bin_stringtable (res->u.stringtable, big_endian);
+    case RES_TYPE_USERDATA:
+      return res_to_bin_rcdata (res->u.rcdata, big_endian);
+    case RES_TYPE_VERSIONINFO:
+      return res_to_bin_versioninfo (res->u.versioninfo, big_endian);
     }
+}
+
+/* Align to a 32 bit boundary.  PPP points to the of a list of bindata
+   structures.  LENGTH points to the length of the structures.  If
+   necessary, this adds a new bindata to bring length up to a 32 bit
+   boundary.  It updates *PPP and *LENGTH.  */
+
+static void
+dword_align_bin (ppp, length)
+     struct bindata ***ppp;
+     unsigned long *length;
+{
+  int add;
+  struct bindata *d;
+
+  if ((*length & 3) == 0)
+    return;
+
+  add = 4 - (*length & 3);
+
+  d = (struct bindata *) reswr_alloc (sizeof *d);
+  d->length = add;
+  d->data = (unsigned char *) reswr_alloc (add);
+  memset (d->data, 0, add);
+
+  d->next = NULL;
+  **ppp = d;
+  *ppp = &(**ppp)->next;
+
+  *length += add;
 }
 
 /* Convert a resource ID to binary.  This always returns exactly one
    bindata structure.  */
 
-static rc_uint_type
-resid_to_bin (windres_bfd *wrbfd, rc_uint_type off, rc_res_id id)
+static struct bindata *
+resid_to_bin (id, big_endian)
+     struct res_id id;
+     int big_endian;
 {
+  struct bindata *d;
+
+  d = (struct bindata *) reswr_alloc (sizeof *d);
+
   if (! id.named)
     {
-      if (wrbfd)
-	{
-	  struct bin_res_id bri;
-	  
-	  windres_put_16 (wrbfd, bri.sig, 0xffff);
-	  windres_put_16 (wrbfd, bri.id, id.u.id);
-	  set_windres_bfd_content (wrbfd, &bri, off, BIN_RES_ID);
-	}
-      off += BIN_RES_ID;
+      d->length = 4;
+      d->data = (unsigned char *) reswr_alloc (4);
+      put_16 (big_endian, 0xffff, d->data);
+      put_16 (big_endian, id.u.id, d->data + 2);
     }
   else
     {
-      rc_uint_type len = (id.u.n.name ? unichar_len (id.u.n.name) : 0);
-      if (wrbfd)
-	{
-	  bfd_byte *d = (bfd_byte *) reswr_alloc ((len + 1) * sizeof (unichar));
-	  rc_uint_type i;
-	  for (i = 0; i < len; i++)
-	    windres_put_16 (wrbfd, d + (i * sizeof (unichar)), id.u.n.name[i]);
-	  windres_put_16 (wrbfd, d + (len * sizeof (unichar)), 0);
-	  set_windres_bfd_content (wrbfd, d, off, (len + 1) * sizeof (unichar));
+      int i;
+
+      d->length = id.u.n.length * 2 + 2;
+      d->data = (unsigned char *) reswr_alloc (d->length);
+      for (i = 0; i < id.u.n.length; i++)
+	put_16 (big_endian, id.u.n.name[i], d->data + i * 2);
+      put_16 (big_endian, 0, d->data + i * 2);
     }
-      off += (rc_uint_type) ((len + 1) * sizeof (unichar));
-    }
-  return off;
+
+  d->next = NULL;
+
+  return d;
 }
 
 /* Convert a null terminated unicode string to binary.  This always
    returns exactly one bindata structure.  */
 
-static rc_uint_type
-unicode_to_bin (windres_bfd *wrbfd, rc_uint_type off, const unichar *str)
+static struct bindata *
+unicode_to_bin (str, big_endian)
+     const unichar *str;
+     int big_endian;
 {
-  rc_uint_type len = 0;
+  int len;
+  struct bindata *d;
 
+  len = 0;
   if (str != NULL)
-    len = unichar_len (str);
-
-  if (wrbfd)
     {
-      bfd_byte *d;
-      rc_uint_type i;
-      d = (bfd_byte *) reswr_alloc ( (len + 1) * sizeof (unichar));
-      for (i = 0; i < len; i++)
-	windres_put_16 (wrbfd, d + (i * sizeof (unichar)), str[i]);
-      windres_put_16 (wrbfd, d + (len * sizeof (unichar)), 0);
-      set_windres_bfd_content (wrbfd, d, off, (len + 1) * sizeof (unichar));
-    }
-  off += (rc_uint_type) ((len + 1) * sizeof (unichar));
+      const unichar *s;
 
-  return off;
+      for (s = str; *s != 0; s++)
+	++len;
+    }
+
+  d = (struct bindata *) reswr_alloc (sizeof *d);
+  d->length = len * 2 + 2;
+  d->data = (unsigned char *) reswr_alloc (d->length);
+
+  if (str == NULL)
+    put_16 (big_endian, 0, d->data);
+  else
+    {
+      const unichar *s;
+      int i;
+
+      for (s = str, i = 0; *s != 0; s++, i++)
+	put_16 (big_endian, *s, d->data + i * 2);
+      put_16 (big_endian, 0, d->data + i * 2);
+    }
+
+  d->next = NULL;
+
+  return d;
 }
 
 /* Convert an accelerator resource to binary.  */
 
-static rc_uint_type
-res_to_bin_accelerator (windres_bfd *wrbfd, rc_uint_type off,
-			const rc_accelerator *accelerators)
+static struct bindata *
+res_to_bin_accelerator (accelerators, big_endian)
+     const struct accelerator *accelerators;
+     int big_endian;
 {
-  bindata *first, **pp;
-  const rc_accelerator *a;
+  struct bindata *first, **pp;
+  const struct accelerator *a;
 
   first = NULL;
   pp = &first;
 
   for (a = accelerators; a != NULL; a = a->next)
     {
-      if (wrbfd)
-	{
-	  struct bin_accelerator ba;
+      struct bindata *d;
 
-	  windres_put_16 (wrbfd, ba.flags, a->flags | (a->next != NULL ? 0 : ACC_LAST));
-	  windres_put_16 (wrbfd, ba.key, a->key);
-	  windres_put_16 (wrbfd, ba.id, a->id);
-	  windres_put_16 (wrbfd, ba.pad, 0);
-	  set_windres_bfd_content (wrbfd, &ba, off, BIN_ACCELERATOR_SIZE);
+      d = (struct bindata *) reswr_alloc (sizeof *d);
+      d->length = 8;
+      d->data = (unsigned char *) reswr_alloc (8);
+
+      put_16 (big_endian,
+	      a->flags | (a->next != NULL ? 0 : ACC_LAST),
+	      d->data);
+      put_16 (big_endian, a->key, d->data + 2);
+      put_16 (big_endian, a->id, d->data + 4);
+      put_16 (big_endian, 0, d->data + 8);
+
+      d->next = NULL;
+      *pp = d;
+      pp = &d->next;
     }
-      off += BIN_ACCELERATOR_SIZE;
-    }
-  return off;
+
+  return first;
 }
 
 /* Convert a cursor resource to binary.  */
 
-static rc_uint_type
-res_to_bin_cursor (windres_bfd *wrbfd, rc_uint_type off, const rc_cursor *c)
+static struct bindata *
+res_to_bin_cursor (c, big_endian)
+     const struct cursor *c;
+     int big_endian;
 {
-  if (wrbfd)
-    {
-      struct bin_cursor bc;
+  struct bindata *d;
 
-      windres_put_16 (wrbfd, bc.xhotspot, c->xhotspot);
-      windres_put_16 (wrbfd, bc.yhotspot, c->yhotspot);
-      set_windres_bfd_content (wrbfd, &bc, off, BIN_CURSOR_SIZE);
-      if (c->length)
-	set_windres_bfd_content (wrbfd, c->data, off + BIN_CURSOR_SIZE, c->length);
-    }
-  off = (off + BIN_CURSOR_SIZE + (rc_uint_type) c->length);
-  return off;
+  d = (struct bindata *) reswr_alloc (sizeof *d);
+  d->length = 4;
+  d->data = (unsigned char *) reswr_alloc (4);
+
+  put_16 (big_endian, c->xhotspot, d->data);
+  put_16 (big_endian, c->yhotspot, d->data + 2);
+
+  d->next = (struct bindata *) reswr_alloc (sizeof *d);
+  d->next->length = c->length;
+  d->next->data = (unsigned char *) c->data;
+  d->next->next = NULL;
+
+  return d;
 }
 
 /* Convert a group cursor resource to binary.  */
 
-static rc_uint_type
-res_to_bin_group_cursor (windres_bfd *wrbfd, rc_uint_type off,
-			 const rc_group_cursor *group_cursors)
+static struct bindata *
+res_to_bin_group_cursor (group_cursors, big_endian)
+     const struct group_cursor *group_cursors;
+     int big_endian;
 {
-  int c = 0;
-  const rc_group_cursor *gc;
-  struct bin_group_cursor bgc;
-  struct bin_group_cursor_item bgci;
-  rc_uint_type start = off;
+  struct bindata *first, **pp;
+  int c;
+  const struct group_cursor *gc;
 
-  off += BIN_GROUP_CURSOR_SIZE;
+  first = (struct bindata *) reswr_alloc (sizeof *first);
+  first->length = 6;
+  first->data = (unsigned char *) reswr_alloc (6);
 
-  for (c = 0, gc = group_cursors; gc != NULL; gc = gc->next, c++)
+  put_16 (big_endian, 0, first->data);
+  put_16 (big_endian, 2, first->data + 2);
+
+  first->next = NULL;
+  pp = &first->next;
+
+  c = 0;
+  for (gc = group_cursors; gc != NULL; gc = gc->next)
     {
-      if (wrbfd)
-	{
-	  windres_put_16 (wrbfd, bgci.width, gc->width);
-	  windres_put_16 (wrbfd, bgci.height, gc->height);
-	  windres_put_16 (wrbfd, bgci.planes, gc->planes);
-	  windres_put_16 (wrbfd, bgci.bits, gc->bits);
-	  windres_put_32 (wrbfd, bgci.bytes, gc->bytes);
-	  windres_put_16 (wrbfd, bgci.index, gc->index);
-	  set_windres_bfd_content (wrbfd, &bgci, off, BIN_GROUP_CURSOR_ITEM_SIZE);
+      struct bindata *d;
+
+      ++c;
+
+      d = (struct bindata *) reswr_alloc (sizeof *d);
+      d->length = 14;
+      d->data = (unsigned char *) reswr_alloc (14);
+
+      put_16 (big_endian, gc->width, d->data);
+      put_16 (big_endian, gc->height, d->data + 2);
+      put_16 (big_endian, gc->planes, d->data + 4);
+      put_16 (big_endian, gc->bits, d->data + 6);
+      put_32 (big_endian, gc->bytes, d->data + 8);
+      put_16 (big_endian, gc->index, d->data + 12);
+
+      d->next = NULL;
+      *pp = d;
+      pp = &d->next;
     }
 
-      off += BIN_GROUP_CURSOR_ITEM_SIZE;
-    }
-  if (wrbfd)
-    {
-      windres_put_16 (wrbfd, bgc.sig1, 0);
-      windres_put_16 (wrbfd, bgc.sig2, 2);
-      windres_put_16 (wrbfd, bgc.nitems, c);
-      set_windres_bfd_content (wrbfd, &bgc, start, BIN_GROUP_CURSOR_SIZE);
-    }
-  return off;
+  put_16 (big_endian, c, first->data + 4);
+
+  return first;
 }
 
 /* Convert a dialog resource to binary.  */
 
-static rc_uint_type
-res_to_bin_dialog (windres_bfd *wrbfd, rc_uint_type off, const rc_dialog *dialog)
+static struct bindata *
+res_to_bin_dialog (dialog, big_endian)
+     const struct dialog *dialog;
+     int big_endian;
 {
-  rc_uint_type off_delta;
-  rc_uint_type start, marker;
   int dialogex;
-  int c;
-  rc_dialog_control *dc;
-  struct bin_dialogex bdx;
-  struct bin_dialog bd;
+  struct bindata *first, **pp;
+  unsigned long length;
+  int off, c;
+  struct dialog_control *dc;
 
-  off_delta = off;
-  start = off;
   dialogex = extended_dialog (dialog);
 
-  if (wrbfd)
-    {
+  first = (struct bindata *) reswr_alloc (sizeof *first);
+  first->length = dialogex ? 26 : 18;
+  first->data = (unsigned char *) reswr_alloc (first->length);
+
+  length = first->length;
+
   if (! dialogex)
     {
-	  windres_put_32 (wrbfd, bd.style, dialog->style);
-	  windres_put_32 (wrbfd, bd.exstyle, dialog->exstyle);
-	  windres_put_16 (wrbfd, bd.x, dialog->x);
-	  windres_put_16 (wrbfd, bd.y, dialog->y);
-	  windres_put_16 (wrbfd, bd.width, dialog->width);
-	  windres_put_16 (wrbfd, bd.height, dialog->height);
+      put_32 (big_endian, dialog->style, first->data);
+      put_32 (big_endian, dialog->exstyle, first->data + 4);
+      off = 8;
     }
   else
     {
-	  windres_put_16 (wrbfd, bdx.sig1, 1);
-	  windres_put_16 (wrbfd, bdx.sig2, 0xffff);
-	  windres_put_32 (wrbfd, bdx.help, (dialog->ex ? dialog->ex->help : 0));
-	  windres_put_32 (wrbfd, bdx.exstyle, dialog->exstyle);
-	  windres_put_32 (wrbfd, bdx.style, dialog->style);
-	  windres_put_16 (wrbfd, bdx.x, dialog->x);
-	  windres_put_16 (wrbfd, bdx.y, dialog->y);
-	  windres_put_16 (wrbfd, bdx.width, dialog->width);
-	  windres_put_16 (wrbfd, bdx.height, dialog->height);
-	}
+      put_16 (big_endian, 1, first->data);
+      put_16 (big_endian, 0xffff, first->data + 2);
+
+      if (dialog->ex == NULL)
+	put_32 (big_endian, 0, first->data + 4);
+      else
+	put_32 (big_endian, dialog->ex->help, first->data + 4);
+      put_32 (big_endian, dialog->exstyle, first->data + 8);
+      put_32 (big_endian, dialog->style, first->data + 12);
+      off = 16;
     }
 
-  off += (dialogex != 0 ? BIN_DIALOGEX_SIZE : BIN_DIALOG_SIZE);
+  put_16 (big_endian, dialog->x, first->data + off + 2);
+  put_16 (big_endian, dialog->y, first->data + off + 4);
+  put_16 (big_endian, dialog->width, first->data + off + 6);
+  put_16 (big_endian, dialog->height, first->data + off + 8);
 
-  off = resid_to_bin (wrbfd, off, dialog->menu);
-  off = resid_to_bin (wrbfd, off, dialog->class);
-  off = unicode_to_bin (wrbfd, off, dialog->caption);
+  pp = &first->next;
+
+  *pp = resid_to_bin (dialog->menu, big_endian);
+  length += (*pp)->length;
+  pp = &(*pp)->next;
+
+  *pp = resid_to_bin (dialog->class, big_endian);
+  length += (*pp)->length;
+  pp = &(*pp)->next;
+
+  *pp = unicode_to_bin (dialog->caption, big_endian);
+  length += (*pp)->length;
+  pp = &(*pp)->next;
 
   if ((dialog->style & DS_SETFONT) != 0)
     {
-      if (wrbfd)
+      struct bindata *d;
+
+      d = (struct bindata *) reswr_alloc (sizeof *d);
+      d->length = dialogex ? 6 : 2;
+      d->data = (unsigned char *) reswr_alloc (d->length);
+
+      length += d->length;
+
+      put_16 (big_endian, dialog->pointsize, d->data);
+
+      if (dialogex)
 	{
-	  if (! dialogex)
+	  if (dialog->ex == NULL)
 	    {
-	      struct bin_dialogfont bdf;
-	      windres_put_16 (wrbfd, bdf.pointsize, dialog->pointsize);
-	      set_windres_bfd_content (wrbfd, &bdf, off, BIN_DIALOGFONT_SIZE);
+	      put_16 (big_endian, 0, d->data + 2);
+	      put_16 (big_endian, 0, d->data + 4);
 	    }
 	  else
 	    {
-	      struct bin_dialogexfont bdxf;
-	      windres_put_16 (wrbfd, bdxf.pointsize, dialog->pointsize);
-	      windres_put_16 (wrbfd, bdxf.weight, (dialog->ex == NULL ? 0 : dialog->ex->weight));
-	      windres_put_8 (wrbfd, bdxf.italic, (dialog->ex == NULL ? 0 : dialog->ex->italic));
-	      windres_put_8 (wrbfd, bdxf.charset, (dialog->ex == NULL ? 1 : dialog->ex->charset));
-	      set_windres_bfd_content (wrbfd, &bdxf, off, BIN_DIALOGEXFONT_SIZE);
+	      put_16 (big_endian, dialog->ex->weight, d->data + 2);
+	      put_16 (big_endian, dialog->ex->italic, d->data + 4);
 	    }
 	}
-      off += (dialogex ? BIN_DIALOGEXFONT_SIZE : BIN_DIALOGFONT_SIZE);
-      off = unicode_to_bin (wrbfd, off, dialog->font);
-    }
-  for (c = 0, dc = dialog->controls; dc != NULL; dc = dc->next, c++)
-    {
-      bfd_byte dc_rclen[2];
 
-      off += (4 - ((off - off_delta) & 3)) & 3;
-      if (wrbfd)
-	{
+      *pp = d;
+      pp = &d->next;
+
+      *pp = unicode_to_bin (dialog->font, big_endian);
+      length += (*pp)->length;
+      pp = &(*pp)->next;
+    }
+
+  c = 0;
+  for (dc = dialog->controls; dc != NULL; dc = dc->next)
+    {
+      struct bindata *d;
+      int dcoff;
+
+      ++c;
+
+      dword_align_bin (&pp, &length);
+
+      d = (struct bindata *) reswr_alloc (sizeof *d);
+      d->length = dialogex ? 24 : 18;
+      d->data = (unsigned char *) reswr_alloc (d->length);
+
+      length += d->length;
+
       if (! dialogex)
 	{
-	      struct bin_dialog_control bdc;
-
-	      windres_put_32 (wrbfd, bdc.style, dc->style);
-	      windres_put_32 (wrbfd, bdc.exstyle, dc->exstyle);
-	      windres_put_16 (wrbfd, bdc.x, dc->x);
-	      windres_put_16 (wrbfd, bdc.y, dc->y);
-	      windres_put_16 (wrbfd, bdc.width, dc->width);
-	      windres_put_16 (wrbfd, bdc.height, dc->height);
-	      windres_put_16 (wrbfd, bdc.id, dc->id);
-	      set_windres_bfd_content (wrbfd, &bdc, off, BIN_DIALOG_CONTROL_SIZE);
+	  put_32 (big_endian, dc->style, d->data);
+	  put_32 (big_endian, dc->exstyle, d->data + 4);
+	  dcoff = 8;
 	}
       else
 	{
-	      struct bin_dialogex_control bdc;
+	  put_32 (big_endian, dc->help, d->data);
+	  put_32 (big_endian, dc->exstyle, d->data + 4);
+	  put_32 (big_endian, dc->style, d->data + 8);
+	  dcoff = 12;
+	}
 
-	      windres_put_32 (wrbfd, bdc.help, dc->help);
-	      windres_put_32 (wrbfd, bdc.exstyle, dc->exstyle);
-	      windres_put_32 (wrbfd, bdc.style, dc->style);
-	      windres_put_16 (wrbfd, bdc.x, dc->x);
-	      windres_put_16 (wrbfd, bdc.y, dc->y);
-	      windres_put_16 (wrbfd, bdc.width, dc->width);
-	      windres_put_16 (wrbfd, bdc.height, dc->height);
-	      windres_put_32 (wrbfd, bdc.id, dc->id);
-	      set_windres_bfd_content (wrbfd, &bdc, off, BIN_DIALOGEX_CONTROL_SIZE);
-	    }
-	}      
-      off += (dialogex != 0 ? BIN_DIALOGEX_CONTROL_SIZE : BIN_DIALOG_CONTROL_SIZE);
+      put_16 (big_endian, dc->x, d->data + dcoff);
+      put_16 (big_endian, dc->y, d->data + dcoff + 2);
+      put_16 (big_endian, dc->width, d->data + dcoff + 4);
+      put_16 (big_endian, dc->height, d->data + dcoff + 6);
 
-      off = resid_to_bin (wrbfd, off, dc->class);
-      off = resid_to_bin (wrbfd, off, dc->text);
+      if (dialogex)
+        put_32 (big_endian, dc->id, d->data + dcoff + 8);
+      else
+        put_16 (big_endian, dc->id, d->data + dcoff + 8);
 
-      marker = off; /* Save two bytes for size of optional data.  */
-      off += 2;
+      *pp = d;
+      pp = &d->next;
+
+      *pp = resid_to_bin (dc->class, big_endian);
+      length += (*pp)->length;
+      pp = &(*pp)->next;
+
+      *pp = resid_to_bin (dc->text, big_endian);
+      length += (*pp)->length;
+      pp = &(*pp)->next;
+
+      d = (struct bindata *) reswr_alloc (sizeof *d);
+      d->length = 2;
+      d->data = (unsigned char *) reswr_alloc (2);
+
+      length += 2;
+
+      d->next = NULL;
+      *pp = d;
+      pp = &d->next;
 
       if (dc->data == NULL)
-        {
-	  if (wrbfd)
-	    windres_put_16 (wrbfd, dc_rclen, 0);
-	}
+	put_16 (big_endian, 0, d->data);
       else
 	{
-	  rc_uint_type saved_off = off;
-	  rc_uint_type old_off;
-	  off += (4 - ((off - off_delta) & 3)) & 3;
+	  unsigned long sublen;
 
-	  old_off = off;
-	  off = res_to_bin_rcdata (wrbfd, off, dc->data);
-	  if ((off - old_off) == 0)
-	    old_off = off = saved_off;
-	  if (wrbfd)
-	    windres_put_16 (wrbfd, dc_rclen, off - old_off);
+	  dword_align_bin (&pp, &length);
+
+	  *pp = res_to_bin_rcdata (dc->data, big_endian);
+	  sublen = 0;
+	  while (*pp != NULL)
+	    {
+	      sublen += (*pp)->length;
+	      pp = &(*pp)->next;
 	    }
-      if (wrbfd)
-	set_windres_bfd_content (wrbfd, dc_rclen, marker, 2);
+
+	  put_16 (big_endian, sublen, d->data);
+
+	  length += sublen;
 	}
-
-  if (wrbfd)
-    {
-      windres_put_16 (wrbfd, (dialogex != 0 ? bdx.off : bd.off), c);
-      if (! dialogex)
-	set_windres_bfd_content (wrbfd, &bd, start, BIN_DIALOG_SIZE);
-      else
-	set_windres_bfd_content (wrbfd, &bdx, start, BIN_DIALOGEX_SIZE);
     }
+  put_16 (big_endian, c, first->data + off);
 
-  return off;
+  return first;
 }
 
 /* Convert a fontdir resource to binary.  */
-static rc_uint_type
-res_to_bin_fontdir (windres_bfd *wrbfd, rc_uint_type off, const rc_fontdir *fontdirs)
+
+static struct bindata *
+res_to_bin_fontdir (fontdirs, big_endian)
+     const struct fontdir *fontdirs;
+     int big_endian;
 {
-  rc_uint_type start;
+  struct bindata *first, **pp;
   int c;
-  const rc_fontdir *fd;
+  const struct fontdir *fd;
 
-  start = off;
-  off += 2;
+  first = (struct bindata *) reswr_alloc (sizeof *first);
+  first->length = 2;
+  first->data = (unsigned char *) reswr_alloc (2);
 
-  for (c = 0, fd = fontdirs; fd != NULL; fd = fd->next, c++)
+  first->next = NULL;
+  pp = &first->next;
+
+  c = 0;
+  for (fd = fontdirs; fd != NULL; fd = fd->next)
     {
-      if (wrbfd)
-	{
-	  bfd_byte d[2];
-	  windres_put_16 (wrbfd, d, fd->index);
-	  set_windres_bfd_content (wrbfd, d, off, 2);
-	  if (fd->length)
-	    set_windres_bfd_content (wrbfd, fd->data, off + 2, fd->length);
-	}
-      off += (rc_uint_type) fd->length + 2;
+      struct bindata *d;
+
+      ++c;
+
+      d = (struct bindata *) reswr_alloc (sizeof *d);
+      d->length = 2;
+      d->data = (unsigned char *) reswr_alloc (2);
+
+      put_16 (big_endian, fd->index, d->data);
+
+      *pp = d;
+      pp = &d->next;
+
+      d = (struct bindata *) reswr_alloc (sizeof *d);
+      d->length = fd->length;
+      d->data = (unsigned char *) fd->data;
+
+      d->next = NULL;
+      *pp = d;
+      pp = &d->next;      
     }
 
-  if (wrbfd)
-    {
-      bfd_byte d[2];
-      windres_put_16 (wrbfd, d, c);
-      set_windres_bfd_content (wrbfd, d, start, 2);
-    }
-  return off;
+  put_16 (big_endian, c, first->data);
+
+  return first;  
 }
 
 /* Convert a group icon resource to binary.  */
 
-static rc_uint_type
-res_to_bin_group_icon (windres_bfd *wrbfd, rc_uint_type off, const rc_group_icon *group_icons)
+static struct bindata *
+res_to_bin_group_icon (group_icons, big_endian)
+     const struct group_icon *group_icons;
+     int big_endian;
 {
-  rc_uint_type start;
-  struct bin_group_icon bgi;
+  struct bindata *first, **pp;
   int c;
-  const rc_group_icon *gi;
+  const struct group_icon *gi;
 
-  start = off;
-  off += BIN_GROUP_ICON_SIZE;
+  first = (struct bindata *) reswr_alloc (sizeof *first);
+  first->length = 6;
+  first->data = (unsigned char *) reswr_alloc (6);
 
-  for (c = 0, gi = group_icons; gi != NULL; gi = gi->next, c++)
+  put_16 (big_endian, 0, first->data);
+  put_16 (big_endian, 1, first->data + 2);
+
+  first->next = NULL;
+  pp = &first->next;
+
+  c = 0;
+  for (gi = group_icons; gi != NULL; gi = gi->next)
     {
-      struct bin_group_icon_item bgii;
+      struct bindata *d;
 
-      if (wrbfd)
-	{
-	  windres_put_8 (wrbfd, bgii.width, gi->width);
-	  windres_put_8 (wrbfd, bgii.height, gi->height);
-	  windres_put_8 (wrbfd, bgii.colors, gi->colors);
-	  windres_put_8 (wrbfd, bgii.pad, 0);
-	  windres_put_16 (wrbfd, bgii.planes, gi->planes);
-	  windres_put_16 (wrbfd, bgii.bits, gi->bits);
-	  windres_put_32 (wrbfd, bgii.bytes, gi->bytes);
-	  windres_put_16 (wrbfd, bgii.index, gi->index);
-	  set_windres_bfd_content (wrbfd, &bgii, off, BIN_GROUP_ICON_ITEM_SIZE);
-	}
-      off += BIN_GROUP_ICON_ITEM_SIZE;
+      ++c;
+
+      d = (struct bindata *) reswr_alloc (sizeof *d);
+      d->length = 14;
+      d->data = (unsigned char *) reswr_alloc (14);
+
+      d->data[0] = gi->width;
+      d->data[1] = gi->height;
+      d->data[2] = gi->colors;
+      d->data[3] = 0;
+      put_16 (big_endian, gi->planes, d->data + 4);
+      put_16 (big_endian, gi->bits, d->data + 6);
+      put_32 (big_endian, gi->bytes, d->data + 8);
+      put_16 (big_endian, gi->index, d->data + 12);
+
+      d->next = NULL;
+      *pp = d;
+      pp = &d->next;
     }
 
-  if (wrbfd)
-    {
-      windres_put_16 (wrbfd, bgi.sig1, 0);
-      windres_put_16 (wrbfd, bgi.sig2, 1);
-      windres_put_16 (wrbfd, bgi.count, c);
-      set_windres_bfd_content (wrbfd, &bgi, start, BIN_GROUP_ICON_SIZE);
-    }
-  return off;
+  put_16 (big_endian, c, first->data + 4);
+
+  return first;
 }
 
 /* Convert a menu resource to binary.  */
 
-static rc_uint_type
-res_to_bin_menu (windres_bfd *wrbfd, rc_uint_type off, const rc_menu *menu)
+static struct bindata *
+res_to_bin_menu (menu, big_endian)
+     const struct menu *menu;
+     int big_endian;
 {
   int menuex;
+  struct bindata *d;
 
   menuex = extended_menu (menu);
 
-  if (wrbfd)
-    {
+  d = (struct bindata *) reswr_alloc (sizeof *d);
+  d->length = menuex ? 8 : 4;
+  d->data = (unsigned char *) reswr_alloc (d->length);
+
   if (! menuex)
     {
-	  struct bin_menu bm;
-	  windres_put_16 (wrbfd, bm.sig1, 0);
-	  windres_put_16 (wrbfd, bm.sig2, 0);
-	  set_windres_bfd_content (wrbfd, &bm, off, BIN_MENU_SIZE);
+      put_16 (big_endian, 0, d->data);
+      put_16 (big_endian, 0, d->data + 2);
+
+      d->next = res_to_bin_menuitems (menu->items, big_endian);
     }
   else
     {
-	  struct bin_menuex bm;
-	  windres_put_16 (wrbfd, bm.sig1, 1);
-	  windres_put_16 (wrbfd, bm.sig2, 4);
-	  windres_put_32 (wrbfd, bm.help, menu->help);
-	  set_windres_bfd_content (wrbfd, &bm, off, BIN_MENUEX_SIZE);
+      put_16 (big_endian, 1, d->data);
+      put_16 (big_endian, 4, d->data + 2);
+      put_32 (big_endian, menu->help, d->data + 4);
+
+      d->next = res_to_bin_menuexitems (menu->items, big_endian);
     }
-    }
-  off += (menuex != 0 ? BIN_MENUEX_SIZE : BIN_MENU_SIZE);
-  if (! menuex)
-    {
-      off = res_to_bin_menuitems (wrbfd, off, menu->items);
-    }
-  else
-    {
-      off = res_to_bin_menuexitems (wrbfd, off, menu->items);
-    }
-  return off;
+
+  return d;
 }
 
 /* Convert menu items to binary.  */
 
-static rc_uint_type
-res_to_bin_menuitems (windres_bfd *wrbfd, rc_uint_type off, const rc_menuitem *items)
+static struct bindata *
+res_to_bin_menuitems (items, big_endian)
+     const struct menuitem *items;
+     int big_endian;
 {
-  const rc_menuitem *mi;
+  struct bindata *first, **pp;
+  const struct menuitem *mi;
+
+  first = NULL;
+  pp = &first;
 
   for (mi = items; mi != NULL; mi = mi->next)
     {
-      struct bin_menuitem bmi;
+      struct bindata *d;
       int flags;
+
+      d = (struct bindata *) reswr_alloc (sizeof *d);
+      d->length = mi->popup == NULL ? 4 : 2;
+      d->data = (unsigned char *) reswr_alloc (d->length);
 
       flags = mi->type;
       if (mi->next == NULL)
@@ -1718,418 +1887,501 @@ res_to_bin_menuitems (windres_bfd *wrbfd, rc_uint_type off, const rc_menuitem *i
       if (mi->popup != NULL)
 	flags |= MENUITEM_POPUP;
 
-      if (wrbfd)
-	{
-	  windres_put_16 (wrbfd, bmi.flags, flags);
-      if (mi->popup == NULL)
-	    windres_put_16 (wrbfd, bmi.id, mi->id);
-	  set_windres_bfd_content (wrbfd, &bmi, off,
-				   mi->popup == NULL ? BIN_MENUITEM_SIZE
-				   		     : BIN_MENUITEM_POPUP_SIZE);
-	}
-      off += (mi->popup == NULL ? BIN_MENUITEM_SIZE : BIN_MENUITEM_POPUP_SIZE);
+      put_16 (big_endian, flags, d->data);
 
-      off = unicode_to_bin (wrbfd, off, mi->text);
+      if (mi->popup == NULL)
+	put_16 (big_endian, mi->id, d->data + 2);
+
+      *pp = d;
+      pp = &d->next;
+
+      *pp = unicode_to_bin (mi->text, big_endian);
+      pp = &(*pp)->next;
 
       if (mi->popup != NULL)
 	{
-	  off = res_to_bin_menuitems (wrbfd, off, mi->popup);
+	  *pp = res_to_bin_menuitems (mi->popup, big_endian);
+	  while (*pp != NULL)
+	    pp = &(*pp)->next;
 	}
     }
-  return off;
+
+  return first;
 }
 
 /* Convert menuex items to binary.  */
 
-static rc_uint_type
-res_to_bin_menuexitems (windres_bfd *wrbfd, rc_uint_type off, const rc_menuitem *items)
+static struct bindata *
+res_to_bin_menuexitems (items, big_endian)
+     const struct menuitem *items;
+     int big_endian;
 {
-  rc_uint_type off_delta = off;
-  const rc_menuitem *mi;
+  struct bindata *first, **pp;
+  unsigned long length;
+  const struct menuitem *mi;
+
+  first = NULL;
+  pp = &first;
+
+  length = 0;
 
   for (mi = items; mi != NULL; mi = mi->next)
     {
-      struct bin_menuitemex bmi;
+      struct bindata *d;
       int flags;
 
-      off += (4 - ((off - off_delta) & 3)) & 3;
+      dword_align_bin (&pp, &length);
+
+      d = (struct bindata *) reswr_alloc (sizeof *d);
+      d->length = 12;
+      d->data = (unsigned char *) reswr_alloc (12);
+
+      length += 12;
+
+      put_32 (big_endian, mi->type, d->data);
+      put_32 (big_endian, mi->state, d->data + 4);
+      put_16 (big_endian, mi->id, d->data + 8);
 
       flags = 0;
       if (mi->next == NULL)
 	flags |= 0x80;
       if (mi->popup != NULL)
 	flags |= 1;
+      put_16 (big_endian, flags, d->data + 10);
 
-      if (wrbfd)
-	{
-	  windres_put_32 (wrbfd, bmi.type, mi->type);
-	  windres_put_32 (wrbfd, bmi.state, mi->state);
-	  windres_put_32 (wrbfd, bmi.id, mi->id);
-	  windres_put_16 (wrbfd, bmi.flags, flags);
-	  set_windres_bfd_content (wrbfd, &bmi, off, BIN_MENUITEMEX_SIZE);
-	}
-      off += BIN_MENUITEMEX_SIZE;
+      *pp = d;
+      pp = &d->next;
 
-      off = unicode_to_bin (wrbfd, off, mi->text);
+      *pp = unicode_to_bin (mi->text, big_endian);
+      length += (*pp)->length;
+      pp = &(*pp)->next;
 
       if (mi->popup != NULL)
 	{
-	  bfd_byte help[4];
+	  dword_align_bin (&pp, &length);
 
-	  off += (4 - ((off - off_delta) & 3)) & 3;
+	  d = (struct bindata *) reswr_alloc (sizeof *d);
+	  d->length = 4;
+	  d->data = (unsigned char *) reswr_alloc (4);
 
-	  if (wrbfd)
+	  put_32 (big_endian, mi->help, d->data);
+
+	  *pp = d;
+	  pp = &d->next;
+
+	  *pp = res_to_bin_menuexitems (mi->popup, big_endian);
+	  while (*pp != NULL)
 	    {
-	      windres_put_32 (wrbfd, help, mi->help);
-	      set_windres_bfd_content (wrbfd, help, off, 4);
+	      length += (*pp)->length;
+	      pp = &(*pp)->next;
 	    }
-	  off += 4;
-	  off = res_to_bin_menuexitems (wrbfd, off, mi->popup);
 	}
     }
-  return off;
+
+  return first;
 }
 
 /* Convert an rcdata resource to binary.  This is also used to convert
-   other information which happens to be stored in rc_rcdata_item lists
+   other information which happens to be stored in rcdata_item lists
    to binary.  */
 
-static rc_uint_type
-res_to_bin_rcdata (windres_bfd *wrbfd, rc_uint_type off, const rc_rcdata_item *items)
+static struct bindata *
+res_to_bin_rcdata (items, big_endian)
+     const struct rcdata_item *items;
+     int big_endian;
 {
-  const rc_rcdata_item *ri;
+  struct bindata *first, **pp;
+  const struct rcdata_item *ri;
+
+  first = NULL;
+  pp = &first;
 
   for (ri = items; ri != NULL; ri = ri->next)
     {
-      rc_uint_type len;
+      struct bindata *d;
+
+      d = (struct bindata *) reswr_alloc (sizeof *d);
+
       switch (ri->type)
 	{
 	default:
 	  abort ();
+
 	case RCDATA_WORD:
-	  len = 2;
+	  d->length = 2;
+	  d->data = (unsigned char *) reswr_alloc (2);
+	  put_16 (big_endian, ri->u.word, d->data);
 	  break;
+
 	case RCDATA_DWORD:
-	  len = 4;
+	  d->length = 4;
+	  d->data = (unsigned char *) reswr_alloc (4);
+	  put_32 (big_endian, ri->u.dword, d->data);
 	  break;
+
 	case RCDATA_STRING:
-	  len = ri->u.string.length;
+	  d->length = ri->u.string.length;
+	  d->data = (unsigned char *) ri->u.string.s;
 	  break;
-	case RCDATA_WSTRING:
-	  len = ri->u.wstring.length * sizeof (unichar);
-	  break;
-	case RCDATA_BUFFER:
-	  len = ri->u.buffer.length;
-	  break;
-	}
-      if (wrbfd)
-	{
-	  bfd_byte h[4];
-	  bfd_byte *hp = &h[0];
-	  switch (ri->type)
-	    {
-	    case RCDATA_WORD:
-	      windres_put_16 (wrbfd, hp, ri->u.word);
-	      break;
-	    case RCDATA_DWORD:
-	      windres_put_32 (wrbfd, hp, ri->u.dword);
-	      break;
-	    case RCDATA_STRING:
-	      hp = (bfd_byte *) ri->u.string.s;
-	  break;
+
 	case RCDATA_WSTRING:
 	  {
-		rc_uint_type i;
+	    unsigned long i;
 
-		hp = (bfd_byte *) reswr_alloc (len);
+	    d->length = ri->u.wstring.length * 2;
+	    d->data = (unsigned char *) reswr_alloc (d->length);
 	    for (i = 0; i < ri->u.wstring.length; i++)
-		  windres_put_16 (wrbfd, hp + i * sizeof (unichar), ri->u.wstring.w[i]);
+	      put_16 (big_endian, ri->u.wstring.w[i], d->data + i * 2);
+	    break;
 	  }
-	      break;
+
 	case RCDATA_BUFFER:
-	      hp = (bfd_byte *) ri->u.buffer.data;
+	  d->length = ri->u.buffer.length;
+	  d->data = (unsigned char *) ri->u.buffer.data;
 	  break;
 	}
-	  set_windres_bfd_content (wrbfd, hp, off, len);
+
+      d->next = NULL;
+      *pp = d;
+      pp = &d->next;
     }
-      off += len;
-    }
-  return off;
+
+  return first;
 }
 
 /* Convert a stringtable resource to binary.  */
 
-static rc_uint_type
-res_to_bin_stringtable (windres_bfd *wrbfd, rc_uint_type off,
-			const rc_stringtable *st)
+static struct bindata *
+res_to_bin_stringtable (st, big_endian)
+     const struct stringtable *st;
+     int big_endian;
 {
+  struct bindata *first, **pp;
   int i;
+
+  first = NULL;
+  pp = &first;
 
   for (i = 0; i < 16; i++)
     {
-      rc_uint_type slen, length;
+      int slen, j;
+      struct bindata *d;
       unichar *s;
 
-      slen = (rc_uint_type) st->strings[i].length;
+      slen = st->strings[i].length;
       s = st->strings[i].string;
 
-      length = 2 + slen * 2;
-      if (wrbfd)
-	{
-	  bfd_byte *hp;
-	  rc_uint_type j;
+      d = (struct bindata *) reswr_alloc (sizeof *d);
+      d->length = 2 + slen * 2;
+      d->data = (unsigned char *) reswr_alloc (d->length);
 
-	  hp = (bfd_byte *) reswr_alloc (length);
-	  windres_put_16 (wrbfd, hp, slen);
+      put_16 (big_endian, slen, d->data);
 
       for (j = 0; j < slen; j++)
-	    windres_put_16 (wrbfd, hp + 2 + j * 2, s[j]);
-	  set_windres_bfd_content (wrbfd, hp, off, length);
+	put_16 (big_endian, s[j], d->data + 2 + j * 2);
+
+      d->next = NULL;
+      *pp = d;
+      pp = &d->next;      
     }
-      off += length;
-    }
-  return off;
+
+  return first;
 }
 
 /* Convert an ASCII string to a unicode binary string.  This always
    returns exactly one bindata structure.  */
 
-static rc_uint_type
-string_to_unicode_bin (windres_bfd *wrbfd, rc_uint_type off, const char *s)
+static struct bindata *
+string_to_unicode_bin (s, big_endian)
+     const char *s;
+     int big_endian;
 {
-  rc_uint_type len;
+  size_t len, i;
+  struct bindata *d;
 
-  len = (rc_uint_type) strlen (s);
+  len = strlen (s);
 
-  if (wrbfd)
-    {
-      rc_uint_type i;
-      bfd_byte *hp;
+  d = (struct bindata *) reswr_alloc (sizeof *d);
+  d->length = len * 2 + 2;
+  d->data = (unsigned char *) reswr_alloc (d->length);
 
-      hp = (bfd_byte *) reswr_alloc ((len + 1) * sizeof (unichar));
+  for (i = 0; i < len; i++)
+    put_16 (big_endian, s[i], d->data + i * 2);
+  put_16 (big_endian, 0, d->data + i * 2);
 
-      for (i = 0; i < len; i++)
-	windres_put_16 (wrbfd, hp + i * 2, s[i]);
-      windres_put_16 (wrbfd, hp + i * 2, 0);
-      set_windres_bfd_content (wrbfd, hp, off, (len + 1) * sizeof (unichar));
-    }
-  off += (rc_uint_type) ((len + 1) * sizeof (unichar));
-  return off;
-}
+  d->next = NULL;
 
-static rc_uint_type
-res_to_bin_toolbar (windres_bfd *wrbfd, rc_uint_type off, rc_toolbar *tb)
-{
-  if (wrbfd)
-    {
-      struct bin_toolbar bt;
-      windres_put_32 (wrbfd, bt.button_width, tb->button_width);
-      windres_put_32 (wrbfd, bt.button_height, tb->button_height);
-      windres_put_32 (wrbfd, bt.nitems, tb->nitems);
-      set_windres_bfd_content (wrbfd, &bt, off, BIN_TOOLBAR_SIZE);
-      if (tb->nitems > 0)
-	{
-	  rc_toolbar_item *it;
-	  bfd_byte *ids;
-	  rc_uint_type i = 0;
-
-	  ids = (bfd_byte *) reswr_alloc (tb->nitems * 4);
-	  it=tb->items;
-	  while(it != NULL)
-	    {
-	      windres_put_32 (wrbfd, ids + i, it->id.u.id);
-	      i += 4;
-	      it = it->next;
-	    }
-	  set_windres_bfd_content (wrbfd, ids, off + BIN_TOOLBAR_SIZE, i);
- 	}
-    }
-  off += BIN_TOOLBAR_SIZE + tb->nitems * 4;
-
-  return off;
+  return d;  
 }
 
 /* Convert a versioninfo resource to binary.  */
 
-static rc_uint_type
-res_to_bin_versioninfo (windres_bfd *wrbfd, rc_uint_type off,
-			const rc_versioninfo *versioninfo)
+static struct bindata *
+res_to_bin_versioninfo (versioninfo, big_endian)
+     const struct versioninfo *versioninfo;
+     int big_endian;
 {
-  rc_uint_type off_delta = off;
-  rc_uint_type start;
-  struct bin_versioninfo bvi;
-  rc_ver_info *vi;
+  struct bindata *first, **pp;
+  unsigned long length;
+  struct ver_info *vi;
 
-  start = off;
-  off += BIN_VERSIONINFO_SIZE;
-  off = string_to_unicode_bin (wrbfd, off, "VS_VERSION_INFO");
-  off += (4 - ((off - off_delta) & 3)) & 3;
+  first = (struct bindata *) reswr_alloc (sizeof *first);
+  first->length = 6;
+  first->data = (unsigned char *) reswr_alloc (6);
+
+  length = 6;
+
+  if (versioninfo->fixed == NULL)
+    put_16 (big_endian, 0, first->data + 2);
+  else
+    put_16 (big_endian, 52, first->data + 2);
+
+  put_16 (big_endian, 0, first->data + 4);
+
+  pp = &first->next;
+
+  *pp = string_to_unicode_bin ("VS_VERSION_INFO", big_endian);
+  length += (*pp)->length;
+  pp = &(*pp)->next;
+
+  dword_align_bin (&pp, &length);
 
   if (versioninfo->fixed != NULL)
     {
-      if (wrbfd)
-	{
-	  struct bin_fixed_versioninfo bfv;
-	  const rc_fixed_versioninfo *fi;
+      const struct fixed_versioninfo *fi;
+      struct bindata *d;
+
+      d = (struct bindata *) reswr_alloc (sizeof *d);
+      d->length = 52;
+      d->data = (unsigned char *) reswr_alloc (52);
+
+      length += 52;
 
       fi = versioninfo->fixed;
-	  windres_put_32 (wrbfd, bfv.sig1, 0xfeef04bd);
-	  windres_put_32 (wrbfd, bfv.sig2, 0x10000);
-	  windres_put_32 (wrbfd, bfv.file_version, fi->file_version_ms);
-	  windres_put_32 (wrbfd, bfv.file_version_ls, fi->file_version_ls);
-	  windres_put_32 (wrbfd, bfv.product_version_ms, fi->product_version_ms);
-	  windres_put_32 (wrbfd, bfv.product_version_ls, fi->product_version_ls);
-	  windres_put_32 (wrbfd, bfv.file_flags_mask, fi->file_flags_mask);
-	  windres_put_32 (wrbfd, bfv.file_flags, fi->file_flags);
-	  windres_put_32 (wrbfd, bfv.file_os, fi->file_os);
-	  windres_put_32 (wrbfd, bfv.file_type, fi->file_type);
-	  windres_put_32 (wrbfd, bfv.file_subtype, fi->file_subtype);
-	  windres_put_32 (wrbfd, bfv.file_date_ms, fi->file_date_ms);
-	  windres_put_32 (wrbfd, bfv.file_date_ls, fi->file_date_ls);
-	  set_windres_bfd_content (wrbfd, &bfv, off, BIN_FIXED_VERSIONINFO_SIZE);
-	}
-      off += BIN_FIXED_VERSIONINFO_SIZE;
+
+      put_32 (big_endian, 0xfeef04bd, d->data);
+      put_32 (big_endian, 0x10000, d->data + 4);
+      put_32 (big_endian, fi->file_version_ms, d->data + 8);
+      put_32 (big_endian, fi->file_version_ls, d->data + 12);
+      put_32 (big_endian, fi->product_version_ms, d->data + 16);
+      put_32 (big_endian, fi->product_version_ls, d->data + 20);
+      put_32 (big_endian, fi->file_flags_mask, d->data + 24);
+      put_32 (big_endian, fi->file_flags, d->data + 28);
+      put_32 (big_endian, fi->file_os, d->data + 32);
+      put_32 (big_endian, fi->file_type, d->data + 36);
+      put_32 (big_endian, fi->file_subtype, d->data + 40);
+      put_32 (big_endian, fi->file_date_ms, d->data + 44);
+      put_32 (big_endian, fi->file_date_ls, d->data + 48);
+
+      d->next = NULL;
+      *pp = d;
+      pp = &d->next;
     }
 
   for (vi = versioninfo->var; vi != NULL; vi = vi->next)
     {
-      struct bin_ver_info bv;
-      rc_uint_type bv_off;
+      struct bindata *vid;
+      unsigned long vilen;
 
-      off += (4 - ((off - off_delta) & 3)) & 3;
+      dword_align_bin (&pp, &length);
 
-      bv_off = off;
+      vid = (struct bindata *) reswr_alloc (sizeof *vid);
+      vid->length = 6;
+      vid->data = (unsigned char *) reswr_alloc (6);
 
-      off += BIN_VER_INFO_SIZE;
+      length += 6;
+      vilen = 6;
+
+      put_16 (big_endian, 0, vid->data + 2);
+      put_16 (big_endian, 0, vid->data + 4);
+
+      *pp = vid;
+      pp = &vid->next;
 
       switch (vi->type)
 	{
 	default:
 	  abort ();
+
 	case VERINFO_STRING:
 	  {
-	    struct bin_ver_info bvsd;
-	    rc_uint_type vs_off;
-	    const rc_ver_stringinfo *vs;
+	    unsigned long hold, vslen;
+	    struct bindata *vsd;
+	    const struct ver_stringinfo *vs;
 
-	    off = string_to_unicode_bin (wrbfd, off, "StringFileInfo");
-	    off += (4 - ((off - off_delta) & 3)) & 3;
+	    *pp = string_to_unicode_bin ("StringFileInfo", big_endian);
+	    length += (*pp)->length;
+	    vilen += (*pp)->length;
+	    pp = &(*pp)->next;
 
-	    vs_off = off;
+	    hold = length;
+	    dword_align_bin (&pp, &length);
+	    vilen += length - hold;
 
-	    off += BIN_VER_INFO_SIZE;
+	    vsd = (struct bindata *) reswr_alloc (sizeof *vsd);
+	    vsd->length = 6;
+	    vsd->data = (unsigned char *) reswr_alloc (6);
 
-	    off = unicode_to_bin (wrbfd, off, vi->u.string.language);
+	    length += 6;
+	    vilen += 6;
+	    vslen = 6;
+
+	    put_16 (big_endian, 0, vsd->data + 2);
+	    put_16 (big_endian, 0, vsd->data + 4);
+
+	    *pp = vsd;
+	    pp = &vsd->next;
+
+	    *pp = unicode_to_bin (vi->u.string.language, big_endian);
+	    length += (*pp)->length;
+	    vilen += (*pp)->length;
+	    vslen += (*pp)->length;
+	    pp = &(*pp)->next;
 
 	    for (vs = vi->u.string.strings; vs != NULL; vs = vs->next)
 	      {
-		struct bin_ver_info bvss;
-		rc_uint_type vss_off,str_off;
+		struct bindata *vssd;
+		unsigned long vsslen;
 
-		off += (4 - ((off - off_delta) & 3)) & 3;
+		hold = length;
+		dword_align_bin (&pp, &length);
+		vilen += length - hold;
+		vslen += length - hold;
 
-		vss_off = off;
-		off += BIN_VER_INFO_SIZE;
+		vssd = (struct bindata *) reswr_alloc (sizeof *vssd);
+		vssd->length = 6;
+		vssd->data = (unsigned char *) reswr_alloc (6);
 
-		off = unicode_to_bin (wrbfd, off, vs->key);
+		length += 6;
+		vilen += 6;
+		vslen += 6;
+		vsslen = 6;
 
-		off += (4 - ((off - off_delta) & 3)) & 3;
+		put_16 (big_endian, 1, vssd->data + 4);
 
-		str_off = off;
-		off = unicode_to_bin (wrbfd, off, vs->value);
-		if (wrbfd)
-		  {
-		    windres_put_16 (wrbfd, bvss.size, off - vss_off);
-		    windres_put_16 (wrbfd, bvss.sig1, (off - str_off) / 2);
-		    windres_put_16 (wrbfd, bvss.sig2, 1);
-		    set_windres_bfd_content (wrbfd, &bvss, vss_off,
-		    			     BIN_VER_INFO_SIZE);
-		  }
+		*pp = vssd;
+		pp = &vssd->next;
+
+		*pp = unicode_to_bin (vs->key, big_endian);
+		length += (*pp)->length;
+		vilen += (*pp)->length;
+		vslen += (*pp)->length;
+		vsslen += (*pp)->length;
+		pp = &(*pp)->next;
+
+		hold = length;
+		dword_align_bin (&pp, &length);
+		vilen += length - hold;
+		vslen += length - hold;
+		vsslen += length - hold;
+
+		*pp = unicode_to_bin (vs->value, big_endian);
+ 		put_16 (big_endian, (*pp)->length / 2, vssd->data + 2);
+		length += (*pp)->length;
+		vilen += (*pp)->length;
+		vslen += (*pp)->length;
+		vsslen += (*pp)->length;
+		pp = &(*pp)->next;
+
+		put_16 (big_endian, vsslen, vssd->data);
 	      }
-	    if (wrbfd)
-	      {
-		windres_put_16 (wrbfd, bvsd.size, off - vs_off);
-		windres_put_16 (wrbfd, bvsd.sig1, 0);
-		windres_put_16 (wrbfd, bvsd.sig2, 0);
-		set_windres_bfd_content (wrbfd, &bvsd, vs_off,
-					 BIN_VER_INFO_SIZE);
-	      }
+
+	    put_16 (big_endian, vslen, vsd->data);
+
 	    break;
 	  }
 
 	case VERINFO_VAR:
 	  {
-	    rc_uint_type vvd_off, vvvd_off;
-	    struct bin_ver_info bvvd;
-	    const rc_ver_varinfo *vv;
+	    unsigned long hold, vvlen, vvvlen;
+	    struct bindata *vvd;
+	    const struct ver_varinfo *vv;
 
-	    off = string_to_unicode_bin (wrbfd, off, "VarFileInfo");
+	    *pp = string_to_unicode_bin ("VarFileInfo", big_endian);
+	    length += (*pp)->length;
+	    vilen += (*pp)->length;
+	    pp = &(*pp)->next;
 
-	    off += (4 - ((off - off_delta) & 3)) & 3;
+	    hold = length;
+	    dword_align_bin (&pp, &length);
+	    vilen += length - hold;
 
-	    vvd_off = off;
-	    off += BIN_VER_INFO_SIZE;
+	    vvd = (struct bindata *) reswr_alloc (sizeof *vvd);
+	    vvd->length = 6;
+	    vvd->data = (unsigned char *) reswr_alloc (6);
 
-	    off = unicode_to_bin (wrbfd, off, vi->u.var.key);
+	    length += 6;
+	    vilen += 6;
+	    vvlen = 6;
 
-	    off += (4 - ((off - off_delta) & 3)) & 3;
+	    put_16 (big_endian, 0, vvd->data + 4);
 
-	    vvvd_off = off;
+	    *pp = vvd;
+	    pp = &vvd->next;
+
+	    *pp = unicode_to_bin (vi->u.var.key, big_endian);
+	    length += (*pp)->length;
+	    vilen += (*pp)->length;
+	    vvlen += (*pp)->length;
+	    pp = &(*pp)->next;
+
+	    hold = length;
+	    dword_align_bin (&pp, &length);
+	    vilen += length - hold;
+	    vvlen += length - hold;
+
+	    vvvlen = 0;
 
 	    for (vv = vi->u.var.var; vv != NULL; vv = vv->next)
 	      {
-		if (wrbfd)
-		  {
-		    bfd_byte vvsd[4];
+		struct bindata *vvsd;
 
-		    windres_put_16 (wrbfd, &vvsd[0], vv->language);
-		    windres_put_16 (wrbfd, &vvsd[2], vv->charset);
-		    set_windres_bfd_content (wrbfd, vvsd, off, 4);
-		  }
-		off += 4;
+		vvsd = (struct bindata *) reswr_alloc (sizeof *vvsd);
+		vvsd->length = 4;
+		vvsd->data = (unsigned char *) reswr_alloc (4);
+
+		length += 4;
+		vilen += 4;
+		vvlen += 4;
+		vvvlen += 4;
+
+		put_16 (big_endian, vv->language, vvsd->data);
+		put_16 (big_endian, vv->charset, vvsd->data + 2);
+
+		vvsd->next = NULL;
+		*pp = vvsd;
+		pp = &vvsd->next;
 	      }
-	    if (wrbfd)
-	    {
-		windres_put_16 (wrbfd, bvvd.size, off - vvd_off);
-		windres_put_16 (wrbfd, bvvd.sig1, off - vvvd_off);
-		windres_put_16 (wrbfd, bvvd.sig2, 0);
-		set_windres_bfd_content (wrbfd, &bvvd, vvd_off,
-					 BIN_VER_INFO_SIZE);
-	    }
+
+	    put_16 (big_endian, vvlen, vvd->data);
+	    put_16 (big_endian, vvvlen, vvd->data + 2);
 
 	    break;
 	  }
 	}
 
-      if (wrbfd)
-	{
-	  windres_put_16 (wrbfd, bv.size, off-bv_off);
-	  windres_put_16 (wrbfd, bv.sig1, 0);
-	  windres_put_16 (wrbfd, bv.sig2, 0);
-	  set_windres_bfd_content (wrbfd, &bv, bv_off,
-	  			   BIN_VER_INFO_SIZE);
-	}
+      put_16 (big_endian, vilen, vid->data);
     }
 
-  if (wrbfd)
-    {
-      windres_put_16 (wrbfd, bvi.size, off - start);
-      windres_put_16 (wrbfd, bvi.fixed_size,
-		      versioninfo->fixed == NULL ? 0
-		      				 : BIN_FIXED_VERSIONINFO_SIZE);
-      windres_put_16 (wrbfd, bvi.sig2, 0);
-      set_windres_bfd_content (wrbfd, &bvi, start, BIN_VER_INFO_SIZE);
-    }
-  return off;
+  put_16 (big_endian, length, first->data);
+
+  return first;
 }
 
 /* Convert a generic resource to binary.  */
 
-static rc_uint_type
-res_to_bin_generic (windres_bfd *wrbfd, rc_uint_type off, rc_uint_type length,
-		    const bfd_byte *data)
+static struct bindata *
+res_to_bin_generic (length, data)
+     unsigned long length;
+     const unsigned char *data;
 {
-  if (wrbfd && length != 0)
-    set_windres_bfd_content (wrbfd, data, off, length);
-  return off + (rc_uint_type) length;
+  struct bindata *d;
+
+  d = (struct bindata *) reswr_alloc (sizeof *d);
+  d->length = length;
+  d->data = (unsigned char *) data;
+
+  d->next = NULL;
+
+  return d;
 }
