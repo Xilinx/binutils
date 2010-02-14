@@ -1,3 +1,10 @@
+2012-10-10  David Holsgrove  <david.holsgrove@xilinx.com>
+
+	* elf32-microblaze.c: Add TLS relocations support
+	* reloc.c: Update with microblaze relocation enums
+	* bfd-in2.h: Add microblaze TLS relocation
+	* libbfd.h: Generated file
+
 2012-10-10  Edgar E. Iglesias  <edgar.iglesias@gmail.com>
 
 	* elf32-microblaze.c: Add microblaze little endian support

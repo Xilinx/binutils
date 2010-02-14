@@ -1,3 +1,7 @@
+2012-10-10  David Holsgrove  <david.holsgrove@xilinx.com>
+
+	* elf/microblaze.h: Define microblaze TLS RELOC_NUMBER
+
 2012-08-28  Matthew Gretton-Dann  <matthew.gretton-dann@arm.com>
 
 	Apply mainline patches
