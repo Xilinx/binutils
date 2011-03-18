@@ -9,7 +9,7 @@ MAXPAGESIZE=4
 ARCH=microblaze
 EMBEDDED=yes
 
-NOP=0x80000000
+NOP=0x00000080
 
 # Hmmm, there's got to be a better way.  This sets the stack to the
 # top of the simulator memory (2^19 bytes).
