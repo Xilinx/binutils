@@ -1,3 +1,8 @@
+2012-10-10  David Holsgrove  <david.holsgrove@xilinx.com>
+
+	* config/tc-microblaze.c: md_estimate_size_before_relax check
+	not a weak symbol
+
 2012-09-18  Kyrylo Tkachov  <kyrylo.tkachov@arm.com>
 
 	* config/tc-arm.c: Changed ldra and strl-form mnemonics
