@@ -1,5 +1,11 @@
 2012-10-10  Edgar E. Iglesias  <edgar.iglesias@gmail.com>
 
+	* elf32-microblaze.c: Add microblaze little endian support
+	* target.c: Likewise
+	* config.bfd, configure, configure.in: Likewise
+
+2012-10-10  Edgar E. Iglesias  <edgar.iglesias@gmail.com>
+
 	* bfd/elf32-microblaze.c: Correct adjustment of global symbols
 	after linker relaxation
 

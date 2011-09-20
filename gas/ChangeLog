@@ -1,5 +1,11 @@
 2012-10-10  Edgar E. Iglesias  <edgar.iglesias@gmail.com>
 
+	* tc-microblaze.c: Add microblaze little endian support
+	* tc-microblaze.h: Likewise
+	* configure.tgt: Likewise
+
+2012-10-10  Edgar E. Iglesias  <edgar.iglesias@gmail.com>
+
 	* config/tc-microblaze.c: INST_TYPE_RD_R1_SPECIAL -> INST_TYPE_R1_R2_SPECIAL
 
 2012-10-10  David Holsgrove  <david.holsgrove@xilinx.com>

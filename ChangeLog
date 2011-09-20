@@ -1,3 +1,7 @@
+2012-10-10  Edgar E. Iglesias  <edgar.iglesias@gmail.com>
+
+	* config.sub: Add microblaze little endian support
+
 2012-08-26  H.J. Lu  <hongjiu.lu@intel.com>
 
 	PR binutils/4970

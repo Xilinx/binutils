@@ -1,5 +1,5 @@
 SCRIPT_NAME=elfmicroblaze
-OUTPUT_FORMAT="elf32-microblaze"
+OUTPUT_FORMAT="elf32-microblazeel"
 BIG_OUTPUT_FORMAT="elf32-microblaze"
 LITTLE_OUTPUT_FORMAT="elf32-microblazeel"
 #TEXT_START_ADDR=0
@@ -21,5 +21,3 @@ NOP=0x80000000
 
 TEMPLATE_NAME=elf32
 #GENERATE_SHLIB_SCRIPT=yes
-
-    
