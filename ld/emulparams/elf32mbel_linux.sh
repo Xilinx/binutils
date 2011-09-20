@@ -1,5 +1,5 @@
 SCRIPT_NAME=elf
-OUTPUT_FORMAT="elf32-microblaze"
+OUTPUT_FORMAT="elf32-microblazeel"
 BIG_OUTPUT_FORMAT="elf32-microblaze"
 LITTLE_OUTPUT_FORMAT="elf32-microblazeel"
 TEXT_START_ADDR=0x10000000
