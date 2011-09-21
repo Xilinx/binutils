@@ -1317,6 +1317,7 @@ microblaze_elf_relax_section (bfd *abfd,
   /* We only do this once per section.  We may be able to delete some code
      by running multiple passes, but it is not worth it.  */
   *again = FALSE;
+  return TRUE;
 
   /* Only do this for a text section.  */
   if (link_info->relocatable
