@@ -1,3 +1,7 @@
+2012-10-10  Nagaraju Mekala  <nagaraju.mekala@xilinx.com>
+
+	* config/tc-microblaze.c: Add support for mbar and sleep insns
+
 2012-10-10  Edgar E. Iglesias  <edgar.iglesias@gmail.com>
 
 	* tc-microblaze.c: Add microblaze little endian support
