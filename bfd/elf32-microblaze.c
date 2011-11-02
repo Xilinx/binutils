@@ -1291,6 +1291,36 @@ calc_fixup (bfd_vma addr, asection *sec)
   return fixup;
 }
 
+/* Read-modify-write into the bfd, an immediate value into appropriate fields of a 32-bit
+ * instruction. */
+static void
+microblaze_bfd_write_imm_value_32 (bfd *abfd, bfd_byte *bfd_addr, bfd_vma val) 
+{
+    unsigned long instr = bfd_get_32 (abfd, bfd_addr);
+    instr &= ~0x0000ffff;
+    instr |= (val & 0x0000ffff);
+    bfd_put_32 (abfd, instr, bfd_addr);
+}
+
+/* Read-modify-write into the bfd, an immediate value into appropriate fields of
+ * two consecutive 32-bit instructions. */
+static void 
+microblaze_bfd_write_imm_value_64 (bfd *abfd, bfd_byte *bfd_addr, bfd_vma val)
+{
+    unsigned long instr_hi;
+    unsigned long instr_lo;
+
+    instr_hi = bfd_get_32 (abfd, bfd_addr);
+    instr_hi &= ~0x0000ffff;
+    instr_hi |= ((val >> 16) & 0x0000ffff);           
+    bfd_put_32 (abfd, instr_hi, bfd_addr);
+
+    instr_lo = bfd_get_32 (abfd, bfd_addr + INST_WORD_SIZE);
+    instr_lo &= ~0x0000ffff;
+    instr_lo |= (val & 0x0000ffff);           
+    bfd_put_32 (abfd, instr_lo, bfd_addr + INST_WORD_SIZE);   
+}
+
 static bfd_boolean
 microblaze_elf_relax_section (bfd *abfd,
 			      asection *sec,
@@ -1317,12 +1347,12 @@ microblaze_elf_relax_section (bfd *abfd,
   /* We only do this once per section.  We may be able to delete some code
      by running multiple passes, but it is not worth it.  */
   *again = FALSE;
-  return TRUE;
 
   /* Only do this for a text section.  */
   if (link_info->relocatable
       || (sec->flags & SEC_RELOC) == 0
-      || (sec->reloc_count == 0))
+      || (sec->reloc_count == 0)
+      || (sec->flags & SEC_CODE) == 0)
     return TRUE;
 
   BFD_ASSERT ((sec->size > 0) || (sec->rawsize > 0));
@@ -1502,7 +1532,8 @@ microblaze_elf_relax_section (bfd *abfd,
 	        efix = calc_fixup (target_address, sec);
 	        irel->r_addend -= (efix - sfix);
 	        /* Should use HOWTO.  */
-	        bfd_put_16 (abfd, irel->r_addend, contents + irel->r_offset + 2);
+                microblaze_bfd_write_imm_value_32 (abfd, contents + irel->r_offset,
+                                                   irel->r_addend);
 	      }
 	      break;
 	    case R_MICROBLAZE_64_NONE:
@@ -1515,8 +1546,9 @@ microblaze_elf_relax_section (bfd *abfd,
 		sfix = calc_fixup (irel->r_offset + INST_WORD_SIZE, sec);
 		efix = calc_fixup (target_address, sec);
 		irel->r_addend -= (efix - sfix);
-		bfd_put_16 (abfd, irel->r_addend, contents + irel->r_offset
-			    + INST_WORD_SIZE + 2);
+                microblaze_bfd_write_imm_value_32 (abfd,
+                                               contents + irel->r_offset + INST_WORD_SIZE,
+                                               irel->r_addend);
 	      }
 	      break;
 	    }
@@ -1644,13 +1676,13 @@ microblaze_elf_relax_section (bfd *abfd,
 			    }
 			}
 
-		      immediate = (unsigned short) bfd_get_16 (abfd, ocontents +
-							       irelscan->r_offset + 2);
+                      unsigned long instr = bfd_get_32 (abfd, ocontents + irelscan->r_offset);
+                      immediate = instr & 0x0000ffff;
 		      target_address = immediate;
 		      offset = calc_fixup (target_address, sec);
 		      immediate -= offset;
 		      irelscan->r_addend -= offset;
-		      bfd_put_16 (abfd, immediate, ocontents + irelscan->r_offset + 2);
+                      microblaze_bfd_write_imm_value_32 (abfd, ocontents + irelscan->r_offset, irelscan->r_addend);
 		    }
 		}
 
@@ -1686,15 +1718,10 @@ microblaze_elf_relax_section (bfd *abfd,
 			      elf_section_data (o)->this_hdr.contents = ocontents;
 			    }
 			}
-		      immediate = (unsigned short) (bfd_get_16 (abfd, ocontents
-								+ irelscan->r_offset
-								+ 2) << 16)
-			& 0xffff0000;
-		      immediate += (unsigned short) (bfd_get_16 (abfd, ocontents
-								 + irelscan->r_offset
-								 + INST_WORD_SIZE + 2))
-			& 0x0000ffff;
-
+                      unsigned long instr_hi =  bfd_get_32 (abfd, ocontents + irelscan->r_offset);
+                      unsigned long instr_lo =  bfd_get_32 (abfd, ocontents + irelscan->r_offset + INST_WORD_SIZE);
+                      immediate = (instr_hi & 0x0000ffff) << 16;
+                      immediate |= (instr_lo & 0x0000ffff);
 		      offset = calc_fixup (irelscan->r_addend, sec);
 		      immediate -= offset;
 		      irelscan->r_addend -= offset;
@@ -1732,22 +1759,15 @@ microblaze_elf_relax_section (bfd *abfd,
 			      elf_section_data (o)->this_hdr.contents = ocontents;
 			    }
 			}
-
-		      immediate = (unsigned short)
-			(bfd_get_16 (abfd, ocontents + irelscan->r_offset + 2) << 16)
-			& 0xffff0000;
-		      immediate += (unsigned short)
-			(bfd_get_16 (abfd, ocontents + irelscan->r_offset
-				     + INST_WORD_SIZE + 2))
-			& 0x0000ffff;
+                      unsigned long instr_hi =  bfd_get_32 (abfd, ocontents + irelscan->r_offset);
+                      unsigned long instr_lo =  bfd_get_32 (abfd, ocontents + irelscan->r_offset + INST_WORD_SIZE);
+                      immediate = (instr_hi & 0x0000ffff) << 16;
+                      immediate |= (instr_lo & 0x0000ffff);
 		      target_address = immediate;
 		      offset = calc_fixup (target_address, sec);
 		      immediate -= offset;
 		      irelscan->r_addend -= offset;
-		      bfd_put_16 (abfd, ((immediate >> 16) & 0x0000ffff),
-				  ocontents + irelscan->r_offset + 2);
-		      bfd_put_16 (abfd, (immediate & 0x0000ffff),
-				  ocontents + irelscan->r_offset + INST_WORD_SIZE + 2);
+                      microblaze_bfd_write_imm_value_64 (abfd, ocontents + irelscan->r_offset, immediate);
 		    }
 		}
             }
@@ -1817,9 +1837,12 @@ microblaze_elf_relax_section (bfd *abfd,
 
   if (sec->relax_count == 0)
     {
+      *again = FALSE;
       free (sec->relax);
       sec->relax = NULL;
     }
+  else
+    *again = TRUE;
   return TRUE;
 
  error_return:
