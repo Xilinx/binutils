@@ -1,3 +1,8 @@
+2012-10-10  David Holsgrove  <david.holsgrove@xilinx.com>
+
+	* microblaze-opcm.h: Add support for slr and shr insns
+	* microblaze-dis.c: Likewise
+
 2012-10-10  Nagaraju Mekala  <nagaraju.mekala@xilinx.com>
 
 	* microblaze-opc.h: Add support for mbar and sleep insns

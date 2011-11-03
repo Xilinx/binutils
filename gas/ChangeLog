@@ -1,3 +1,7 @@
+2012-10-10  David Holsgrove  <david.holsgrove@xilinx.com>
+
+	* config/tc-microblaze.c: Add support for slr and shr insns
+
 2012-10-10  Nagaraju Mekala  <nagaraju.mekala@xilinx.com>
 
 	* config/tc-microblaze.c: Add support for mbar and sleep insns
