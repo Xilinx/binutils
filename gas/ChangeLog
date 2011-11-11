@@ -1,5 +1,10 @@
 2012-10-10  David Holsgrove  <david.holsgrove@xilinx.com>
 
+	* config/tc-microblaze.c: Remove special register condition check
+	for INST_TYPE_RFSL related insn
+
+2012-10-10  David Holsgrove  <david.holsgrove@xilinx.com>
+
 	* config/tc-microblaze.c: md_estimate_size_before_relax check
 	not a weak symbol
 
