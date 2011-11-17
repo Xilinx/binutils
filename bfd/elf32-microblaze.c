@@ -1783,12 +1783,12 @@ microblaze_elf_relax_section (bfd *abfd,
 
       /* Now adjust the global symbols defined in this section.  */
       isym = isymbuf + symtab_hdr->sh_info;
+      symcount =  (symtab_hdr->sh_size / sizeof (Elf32_External_Sym)) - symtab_hdr->sh_info;
       isymend = isymbuf + (symtab_hdr->sh_size / sizeof (Elf32_External_Sym));
-      for (sym_index = 0; isym < isymend; isym++, sym_index++)
+      for (sym_index = 0; sym_index < symcount; sym_index++)
         {
           sym_hash = elf_sym_hashes (abfd)[sym_index];
-          if (isym->st_shndx == shndx
-              && (sym_hash->root.type == bfd_link_hash_defined
+          if ((sym_hash->root.type == bfd_link_hash_defined
                   || sym_hash->root.type == bfd_link_hash_defweak)
               && sym_hash->root.u.def.section == sec)
 	    {
