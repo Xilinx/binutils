@@ -1273,6 +1273,27 @@ microblaze_elf_merge_private_bfd_data (bfd * ibfd, bfd * obfd)
 /* Calculate fixup value for reference.  */
 
 static int
+calc_size_fixup (bfd_vma start, bfd_vma size, asection *sec)
+{
+  bfd_vma end = start + size;
+  int i, fixup = 0;
+
+  if (sec == NULL || sec->relax == NULL)
+    return 0;
+
+  /* Look for addr in relax table, total fixup value.  */
+  for (i = 0; i < sec->relax_count; i++)
+    {
+      if (end < sec->relax[i].addr)
+        break;
+      if (start >= sec->relax[i].addr)
+        continue;
+      fixup += sec->relax[i].size;
+    }
+  return fixup;
+}
+
+static int
 calc_fixup (bfd_vma addr, asection *sec)
 {
   int i, fixup = 0;
@@ -1777,8 +1798,14 @@ microblaze_elf_relax_section (bfd *abfd,
       isymend = isymbuf + symtab_hdr->sh_info;
       for (isym = isymbuf; isym < isymend; isym++)
         {
-          if (isym->st_shndx == shndx)
-	    isym->st_value =- calc_fixup (isym->st_value, sec);
+          if (isym->st_shndx == shndx) {
+            int count, count_size;
+
+            count = calc_fixup (isym->st_value, sec);
+            count_size = calc_size_fixup (isym->st_value, isym->st_size, sec);
+            isym->st_value =- count;
+            isym->st_size =- count_size;
+          }
         }
 
       /* Now adjust the global symbols defined in this section.  */
@@ -1792,8 +1819,12 @@ microblaze_elf_relax_section (bfd *abfd,
                   || sym_hash->root.type == bfd_link_hash_defweak)
               && sym_hash->root.u.def.section == sec)
 	    {
-	      sym_hash->root.u.def.value -= calc_fixup (sym_hash->root.u.def.value,
-						        sec);
+              int count, count_size;
+
+              count = calc_fixup (sym_hash->root.u.def.value, sec);
+              count_size = calc_size_fixup (sym_hash->root.u.def.value, sym_hash->size, sec);
+              sym_hash->root.u.def.value -= count;
+              sym_hash->size -= count_size;
 	    }
 	}
 
