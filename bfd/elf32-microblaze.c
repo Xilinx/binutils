@@ -1272,6 +1272,8 @@ microblaze_elf_merge_private_bfd_data (bfd * ibfd, bfd * obfd)
 
 /* Calculate fixup value for reference.  */
 
+#define D(x)
+
 static int
 calc_size_fixup (bfd_vma start, bfd_vma size, asection *sec)
 {
@@ -1284,9 +1286,11 @@ calc_size_fixup (bfd_vma start, bfd_vma size, asection *sec)
   /* Look for addr in relax table, total fixup value.  */
   for (i = 0; i < sec->relax_count; i++)
     {
+      D(fprintf(stderr, "%s: start=%x end=%x reladdr=%x relsize=%d\n", __func__,
+		start, end, sec->relax[i].addr, sec->relax[i].size));
       if (end < sec->relax[i].addr)
         break;
-      if (start >= sec->relax[i].addr)
+      if (start > sec->relax[i].addr)
         continue;
       fixup += sec->relax[i].size;
     }
@@ -1406,6 +1410,7 @@ microblaze_elf_relax_section (bfd *abfd,
 
   irelend = internal_relocs + sec->reloc_count;
   rel_count = 0;
+  D(fprintf (stderr, "%s:%s\n", abfd->filename, sec->name));
   for (irel = internal_relocs; irel < irelend; irel++, rel_count++)
     {
       bfd_vma symval;
@@ -1803,8 +1808,11 @@ microblaze_elf_relax_section (bfd *abfd,
 
             count = calc_fixup (isym->st_value, sec);
             count_size = calc_size_fixup (isym->st_value, isym->st_size, sec);
-            isym->st_value =- count;
-            isym->st_size =- count_size;
+            D(fprintf(stderr, "local adjust loc=%x.%d size=%d.%d \n",
+			isym->st_value, -count,
+			isym->st_size, -count_size));
+            isym->st_value -= count;
+            isym->st_size -= count_size;
           }
         }
 
@@ -1823,6 +1831,9 @@ microblaze_elf_relax_section (bfd *abfd,
 
               count = calc_fixup (sym_hash->root.u.def.value, sec);
               count_size = calc_size_fixup (sym_hash->root.u.def.value, sym_hash->size, sec);
+              D(fprintf(stderr, "adjust loc=%x.%d size=%d.%d \n",
+			sym_hash->root.u.def.value, -count,
+			 sym_hash->size, -count_size));
               sym_hash->root.u.def.value -= count;
               sym_hash->size -= count_size;
 	    }
@@ -1839,6 +1850,8 @@ microblaze_elf_relax_section (bfd *abfd,
           memmove (contents + dest, contents + src, len);
           sec->size -= sec->relax[i].size;
           dest += len;
+          D(fprintf(stderr, "relax %x to %x relaxsize=%d secsize=%d\n",
+		src, dest, sec->relax[i].size, sec->size));
         }
 
       elf_section_data (sec)->relocs = internal_relocs;
