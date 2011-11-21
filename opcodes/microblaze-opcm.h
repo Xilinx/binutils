@@ -23,13 +23,6 @@
 #ifndef MICROBLAZE_OPCM
 #define MICROBLAZE_OPCM
 
-enum microblaze_instr_type
-{
-  arithmetic_inst, logical_inst, mult_inst, div_inst, branch_inst,
-  return_inst, immediate_inst, special_inst, memory_load_inst,
-  memory_store_inst, barrel_shift_inst, anyware_inst
-};
-
 #define INST_WORD_SIZE 4
 
 /* Gen purpose regs go from 0 to 31.  */
