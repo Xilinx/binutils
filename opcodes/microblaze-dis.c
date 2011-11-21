@@ -224,7 +224,7 @@ print_insn_microblaze (bfd_vma memaddr, struct disassemble_info * info)
           prev_inst = read_insn_microblaze (prev_insn_addr, info, &pop);
 	  if (prev_inst == 0)
 	    return -1;
-	  if (pop->instr == imm)
+	  if (!strcmp(pop->name, "imm"))
 	    {
 	      immval = (get_int_field_imm (prev_inst) << 16) & 0xffff0000;
 	      immfound = TRUE;
@@ -350,7 +350,7 @@ print_insn_microblaze (bfd_vma memaddr, struct disassemble_info * info)
         case INST_TYPE_IMM:
 	  print_func (stream, "\t%s", get_field_imm (inst));
 	  if (info->print_address_func && info->symbol_at_address_func
-	      && op->instr != imm)
+	      && strcmp(op->name, "imm"))
 	    {
 	      if (immfound)
 	        immval |= (get_int_field_imm (inst) & 0x0000ffff);

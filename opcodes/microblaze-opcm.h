@@ -23,41 +23,6 @@
 #ifndef MICROBLAZE_OPCM
 #define MICROBLAZE_OPCM
 
-enum microblaze_instr
-{
-  add, rsub, addc, rsubc, addk, rsubk, addkc, rsubkc, clz, cmp, cmpu,
-  addi, rsubi, addic, rsubic, addik, rsubik, addikc, rsubikc, mul,
-  mulh, mulhu, mulhsu,
-  idiv, idivu, bsll, bsra, bsrl, get, put, nget, nput, cget, cput,
-  ncget, ncput, muli, bslli, bsrai, bsrli, mului, or, and, xor,
-  andn, pcmpbf, pcmpbc, pcmpeq, pcmpne, sra, src, srl, sext8, sext16,
-  wic, wdc, wdcclear, wdcflush, mts, mfs, mbar, br, brd,
-  brld, bra, brad, brald, microblaze_brk, beq, beqd, bne, bned, blt,
-  bltd, ble, bled, bgt, bgtd, bge, bged, ori, andi, xori, andni,
-  imm, rtsd, rtid, rtbd, rted, bri, brid, brlid, brai, braid, bralid,
-  brki, beqi, beqid, bnei, bneid, blti, bltid, blei, bleid, bgti,
-  bgtid, bgei, bgeid, lbu, lbur, lhu, lhur, lw, lwr, lwx, sb, sbr, sh, shr, sw, swr, swx, lbui, lhui, lwi,
-  sbi, shi, swi, msrset, msrclr, fadd, frsub, fmul, fdiv,
-  fcmp_lt, fcmp_eq, fcmp_le, fcmp_gt, fcmp_ne, fcmp_ge, fcmp_un, flt,
-  fint, fsqrt,
-  tget, tcget, tnget, tncget, tput, tcput, tnput, tncput,
-  eget, ecget, neget, necget, eput, ecput, neput, necput,
-  teget, tecget, tneget, tnecget, teput, tecput, tneput, tnecput,
-  aget, caget, naget, ncaget, aput, caput, naput, ncaput,
-  taget, tcaget, tnaget, tncaget, taput, tcaput, tnaput, tncaput,
-  eaget, ecaget, neaget, necaget, eaput, ecaput, neaput, necaput,
-  teaget, tecaget, tneaget, tnecaget, teaput, tecaput, tneaput, tnecaput,
-  getd, tgetd, cgetd, tcgetd, ngetd, tngetd, ncgetd, tncgetd,
-  putd, tputd, cputd, tcputd, nputd, tnputd, ncputd, tncputd,
-  egetd, tegetd, ecgetd, tecgetd, negetd, tnegetd, necgetd, tnecgetd,
-  eputd, teputd, ecputd, tecputd, neputd, tneputd, necputd, tnecputd,
-  agetd, tagetd, cagetd, tcagetd, nagetd, tnagetd, ncagetd, tncagetd,
-  aputd, taputd, caputd, tcaputd, naputd, tnaputd, ncaputd, tncaputd,
-  eagetd, teagetd, ecagetd, tecagetd, neagetd, tneagetd, necagetd, tnecagetd,
-  eaputd, teaputd, ecaputd, tecaputd, neaputd, tneaputd, necaputd, tnecaputd,
-  invalid_inst
-};
-
 enum microblaze_instr_type
 {
   arithmetic_inst, logical_inst, mult_inst, div_inst, branch_inst,
