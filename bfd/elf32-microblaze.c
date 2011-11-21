@@ -1256,7 +1256,7 @@ microblaze_elf_relocate_section (bfd *output_bfd,
 }
 
 /* Merge backend specific data from an object file to the output
-   object file when linking.  
+   object file when linking.
 
    Note: We only use this hook to catch endian mismatches */
 static bfd_boolean
@@ -1269,7 +1269,6 @@ microblaze_elf_merge_private_bfd_data (bfd * ibfd, bfd * obfd)
   return TRUE;
 }
 
-
 /* Calculate fixup value for reference.  */
 
 #define D(x)
@@ -1319,7 +1318,7 @@ calc_fixup (bfd_vma addr, asection *sec)
 /* Read-modify-write into the bfd, an immediate value into appropriate fields of a 32-bit
  * instruction. */
 static void
-microblaze_bfd_write_imm_value_32 (bfd *abfd, bfd_byte *bfd_addr, bfd_vma val) 
+microblaze_bfd_write_imm_value_32 (bfd *abfd, bfd_byte *bfd_addr, bfd_vma val)
 {
     unsigned long instr = bfd_get_32 (abfd, bfd_addr);
     instr &= ~0x0000ffff;
@@ -1329,7 +1328,7 @@ microblaze_bfd_write_imm_value_32 (bfd *abfd, bfd_byte *bfd_addr, bfd_vma val)
 
 /* Read-modify-write into the bfd, an immediate value into appropriate fields of
  * two consecutive 32-bit instructions. */
-static void 
+static void
 microblaze_bfd_write_imm_value_64 (bfd *abfd, bfd_byte *bfd_addr, bfd_vma val)
 {
     unsigned long instr_hi;
@@ -1337,13 +1336,13 @@ microblaze_bfd_write_imm_value_64 (bfd *abfd, bfd_byte *bfd_addr, bfd_vma val)
 
     instr_hi = bfd_get_32 (abfd, bfd_addr);
     instr_hi &= ~0x0000ffff;
-    instr_hi |= ((val >> 16) & 0x0000ffff);           
+    instr_hi |= ((val >> 16) & 0x0000ffff);
     bfd_put_32 (abfd, instr_hi, bfd_addr);
 
     instr_lo = bfd_get_32 (abfd, bfd_addr + INST_WORD_SIZE);
     instr_lo &= ~0x0000ffff;
-    instr_lo |= (val & 0x0000ffff);           
-    bfd_put_32 (abfd, instr_lo, bfd_addr + INST_WORD_SIZE);   
+    instr_lo |= (val & 0x0000ffff);
+    bfd_put_32 (abfd, instr_lo, bfd_addr + INST_WORD_SIZE);
 }
 
 static bfd_boolean
