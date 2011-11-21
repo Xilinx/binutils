@@ -44,7 +44,6 @@ INST_TYPE_RD_RFSL,
 INST_TYPE_R1_RFSL,
 INST_TYPE_R1_R2_SPECIAL, /* New insn type for insn cache */
 INST_TYPE_RD_IMM15, /* New insn type for msrclr, msrset insns */
-INST_TYPE_RD, /* New insn type for tuqula rd - addik rd, r0, 42 */
 INST_TYPE_RFSL, /* New insn type for t*put */
 INST_TYPE_IMM5, /* For mbar */
 INST_TYPE_NONE,
@@ -234,7 +233,6 @@ struct op_code_struct
   {"swi",   INST_TYPE_RD_R1_IMM, INST_NO_OFFSET, NO_DELAY_SLOT, IMMVAL_MASK_NON_SPECIAL, 0xF8000000, OPCODE_MASK_H, swi, memory_store_inst },
   {"nop",   INST_TYPE_NONE, INST_NO_OFFSET, NO_DELAY_SLOT, IMMVAL_MASK_NON_SPECIAL, 0x80000000, OPCODE_MASK_H1234, invalid_inst, logical_inst }, /* translates to or r0, r0, r0.  */
   {"la",    INST_TYPE_RD_R1_IMM, INST_NO_OFFSET, NO_DELAY_SLOT, IMMVAL_MASK_NON_SPECIAL, 0x30000000, OPCODE_MASK_H, invalid_inst, arithmetic_inst }, /* la translates to addik.  */
-  {"tuqula",INST_TYPE_RD, INST_NO_OFFSET, NO_DELAY_SLOT, IMMVAL_MASK_NON_SPECIAL, 0x3000002A, OPCODE_MASK_H, invalid_inst, arithmetic_inst }, /* tuqula rd translates to addik rd, r0, 42.  */
   {"not",   INST_TYPE_RD_R1, INST_NO_OFFSET, NO_DELAY_SLOT, IMMVAL_MASK_NON_SPECIAL, 0xA800FFFF, OPCODE_MASK_H34, invalid_inst, logical_inst }, /* not translates to xori rd,ra,-1.  */
   {"neg",   INST_TYPE_RD_R1, INST_NO_OFFSET, NO_DELAY_SLOT, IMMVAL_MASK_NON_SPECIAL, 0x04000000, OPCODE_MASK_H, invalid_inst, arithmetic_inst }, /* neg translates to rsub rd, ra, r0.  */
   {"rtb",   INST_TYPE_R1, INST_NO_OFFSET, NO_DELAY_SLOT, IMMVAL_MASK_NON_SPECIAL, 0xB6000004, OPCODE_MASK_H1, invalid_inst, return_inst }, /* rtb translates to rts rd, 4.  */

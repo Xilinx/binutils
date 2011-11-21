@@ -393,10 +393,6 @@ print_insn_microblaze (bfd_vma memaddr, struct disassemble_info * info)
         case INST_TYPE_IMM5:
           print_func (stream, "\t%s", get_field_imm5_mbar (inst));
           break;
-	/* For tuqula instruction */
-	case INST_TYPE_RD:
-	  print_func (stream, "\t%s", get_field_rd (inst));
-	  break;
 	case INST_TYPE_RFSL:
 	  print_func (stream, "\t%s", get_field_rfsl (inst));
 	  break;

@@ -37,7 +37,7 @@ enum microblaze_instr
   imm, rtsd, rtid, rtbd, rted, bri, brid, brlid, brai, braid, bralid,
   brki, beqi, beqid, bnei, bneid, blti, bltid, blei, bleid, bgti,
   bgtid, bgei, bgeid, lbu, lbur, lhu, lhur, lw, lwr, lwx, sb, sbr, sh, shr, sw, swr, swx, lbui, lhui, lwi,
-  sbi, shi, swi, msrset, msrclr, tuqula, fadd, frsub, fmul, fdiv,
+  sbi, shi, swi, msrset, msrclr, fadd, frsub, fmul, fdiv,
   fcmp_lt, fcmp_eq, fcmp_le, fcmp_gt, fcmp_ne, fcmp_ge, fcmp_un, flt,
   fint, fsqrt,
   tget, tcget, tnget, tncget, tput, tcput, tnput, tncput,

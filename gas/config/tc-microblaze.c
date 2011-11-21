@@ -1237,24 +1237,6 @@ md_assemble (char * str)
       output = frag_more (isize);
       break;
 
-      /* For tuqula insn...:) */
-    case INST_TYPE_RD:
-      if (strcmp (op_end, ""))
-        op_end = parse_reg (op_end + 1, &reg1);  /* Get rd.  */
-      else
-	{
-          as_fatal (_("Error in statement syntax"));
-          reg1 = 0;
-        }
-
-      /* Check for spl registers.  */
-      if (check_spl_reg (&reg1))
-        as_fatal (_("Cannot use special register with this instruction"));
-
-      inst |= (reg1 << RD_LOW) & RD_MASK;
-      output = frag_more (isize);
-      break;
-
     case INST_TYPE_RD_SPECIAL:
       if (strcmp (op_end, ""))
         op_end = parse_reg (op_end + 1, &reg1);  /* Get rd.  */
