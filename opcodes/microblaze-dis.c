@@ -413,12 +413,10 @@ print_insn_microblaze (bfd_vma memaddr, struct disassemble_info * info)
 
 enum microblaze_instr
 get_insn_microblaze (long inst,
-  		     bfd_boolean *isunsignedimm,
   		     enum microblaze_instr_type *insn_type,
   		     short *delay_slots)
 {
   struct op_code_struct * op;
-  *isunsignedimm = FALSE;
 
   /* Just a linear search of the table.  */
   for (op = opcodes; op->name != 0; op ++)
@@ -429,7 +427,6 @@ get_insn_microblaze (long inst,
     return invalid_inst;
   else
     {
-      *isunsignedimm = (op->inst_type == INST_TYPE_RD_R1_UNSIGNED_IMM);
       *insn_type = op->instr_type;
       *delay_slots = op->delay_slots;
       return op->instr;
@@ -440,11 +437,10 @@ enum microblaze_instr
 microblaze_decode_insn (long insn, int *rd, int *ra, int *rb, int *immed)
 {
   enum microblaze_instr op;
-  bfd_boolean t1;
   enum microblaze_instr_type t2;
   short t3;
 
-  op = get_insn_microblaze (insn, &t1, &t2, &t3);
+  op = get_insn_microblaze (insn, &t2, &t3);
   *rd = (insn & RD_MASK) >> RD_LOW;
   *ra = (insn & RA_MASK) >> RA_LOW;
   *rb = (insn & RB_MASK) >> RB_LOW;
