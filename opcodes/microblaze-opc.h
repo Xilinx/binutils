@@ -25,43 +25,31 @@
 
 #include "microblaze-opcm.h"
 
-
-#define INST_TYPE_RD_R1_R2 0
-#define INST_TYPE_RD_R1_IMM 1
-#define INST_TYPE_RD_R1_UNSIGNED_IMM 2
-#define INST_TYPE_RD_R1 3
-#define INST_TYPE_RD_R2 4
-#define INST_TYPE_RD_IMM 5
-#define INST_TYPE_R2 6
-#define INST_TYPE_R1_R2 7
-#define INST_TYPE_R1_IMM 8
-#define INST_TYPE_IMM 9
-#define INST_TYPE_SPECIAL_R1 10
-#define INST_TYPE_RD_SPECIAL 11
-#define INST_TYPE_R1 12
-/* New instn type for barrel shift imms.  */
-#define INST_TYPE_RD_R1_IMM5  13
-#define INST_TYPE_RD_RFSL    14
-#define INST_TYPE_R1_RFSL    15
-
-/* New insn type for insn cache.  */
-#define INST_TYPE_R1_R2_SPECIAL 16
-
-/* New insn type for msrclr, msrset insns.  */
-#define INST_TYPE_RD_IMM15    17
-
-/* New insn type for tuqula rd - addik rd, r0, 42.  */
-#define INST_TYPE_RD    18
-
-/* New insn type for t*put.  */
-#define INST_TYPE_RFSL  19
-
-/* For mbar.  */
-#define INST_TYPE_IMM5 20
-
-#define INST_TYPE_NONE 25
-
-
+enum microblaze_instruction_type
+{
+INST_TYPE_RD_R1_R2,
+INST_TYPE_RD_R1_IMM,
+INST_TYPE_RD_R1_UNSIGNED_IMM,
+INST_TYPE_RD_R1,
+INST_TYPE_RD_R2,
+INST_TYPE_RD_IMM,
+INST_TYPE_R2,
+INST_TYPE_R1_R2,
+INST_TYPE_R1_IMM,
+INST_TYPE_IMM,
+INST_TYPE_SPECIAL_R1, /* mts */
+INST_TYPE_RD_SPECIAL, /* mfs */
+INST_TYPE_R1,
+INST_TYPE_RD_R1_IMM5, /* New instn type for barrel shift imms */
+INST_TYPE_RD_RFSL,
+INST_TYPE_R1_RFSL,
+INST_TYPE_R1_R2_SPECIAL, /* New insn type for insn cache */
+INST_TYPE_RD_IMM15, /* New insn type for msrclr, msrset insns */
+INST_TYPE_RD, /* New insn type for tuqula rd - addik rd, r0, 42 */
+INST_TYPE_RFSL, /* New insn type for t*put */
+INST_TYPE_IMM5, /* For mbar */
+INST_TYPE_NONE,
+};
 
 /* Instructions where the label address is resolved as a PC offset
    (for branch label).  */
