@@ -22,7 +22,4 @@
 #ifndef MICROBLAZE_DIS_H
 #define MICROBLAZE_DIS_H 1
 
-extern enum microblaze_instr get_insn_microblaze (long, bfd_boolean *,
-  		     				  short *);
-
 #endif /* microblaze-dis.h */

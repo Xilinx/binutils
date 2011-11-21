@@ -406,25 +406,3 @@ print_insn_microblaze (bfd_vma memaddr, struct disassemble_info * info)
   /* Say how many bytes we consumed.  */
   return 4;
 }
-
-enum microblaze_instr
-get_insn_microblaze (long inst,
-  		     enum microblaze_instr_type *insn_type,
-  		     short *delay_slots)
-{
-  struct op_code_struct * op;
-
-  /* Just a linear search of the table.  */
-  for (op = opcodes; op->name != 0; op ++)
-    if (op->bit_sequence == (inst & op->opcode_mask))
-      break;
-
-  if (op->name == 0)
-    return invalid_inst;
-  else
-    {
-      *insn_type = op->instr_type;
-      *delay_slots = op->delay_slots;
-      return op->instr;
-    }
-}
