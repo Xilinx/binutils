@@ -235,7 +235,6 @@ struct op_code_struct
   {"la",    INST_TYPE_RD_R1_IMM, INST_NO_OFFSET, NO_DELAY_SLOT, IMMVAL_MASK_NON_SPECIAL, 0x30000000, OPCODE_MASK_H, invalid_inst, arithmetic_inst }, /* la translates to addik.  */
   {"not",   INST_TYPE_RD_R1, INST_NO_OFFSET, NO_DELAY_SLOT, IMMVAL_MASK_NON_SPECIAL, 0xA800FFFF, OPCODE_MASK_H34, invalid_inst, logical_inst }, /* not translates to xori rd,ra,-1.  */
   {"neg",   INST_TYPE_RD_R1, INST_NO_OFFSET, NO_DELAY_SLOT, IMMVAL_MASK_NON_SPECIAL, 0x04000000, OPCODE_MASK_H, invalid_inst, arithmetic_inst }, /* neg translates to rsub rd, ra, r0.  */
-  {"rtb",   INST_TYPE_R1, INST_NO_OFFSET, NO_DELAY_SLOT, IMMVAL_MASK_NON_SPECIAL, 0xB6000004, OPCODE_MASK_H1, invalid_inst, return_inst }, /* rtb translates to rts rd, 4.  */
   {"sub",   INST_TYPE_RD_R1_R2, INST_NO_OFFSET, NO_DELAY_SLOT, IMMVAL_MASK_NON_SPECIAL, 0x04000000, OPCODE_MASK_H, invalid_inst, arithmetic_inst }, /* sub translates to rsub rd, rb, ra.  */
   {"lmi",   INST_TYPE_RD_R1_IMM, INST_NO_OFFSET, NO_DELAY_SLOT, IMMVAL_MASK_NON_SPECIAL, 0xE8000000, OPCODE_MASK_H, invalid_inst, memory_load_inst },
   {"smi",   INST_TYPE_RD_R1_IMM, INST_NO_OFFSET, NO_DELAY_SLOT, IMMVAL_MASK_NON_SPECIAL, 0xF8000000, OPCODE_MASK_H, invalid_inst, memory_store_inst },
