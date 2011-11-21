@@ -22,8 +22,6 @@
 #ifndef MICROBLAZE_DIS_H
 #define MICROBLAZE_DIS_H 1
 
-extern enum microblaze_instr microblaze_decode_insn (long, int *, int *,
-						     int *, int *);
 extern unsigned long microblaze_get_target_address (long, bfd_boolean, int,
 			       long, long, long, bfd_boolean *, bfd_boolean *);
 

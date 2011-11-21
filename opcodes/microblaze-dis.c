@@ -429,22 +429,6 @@ get_insn_microblaze (long inst,
     }
 }
 
-enum microblaze_instr
-microblaze_decode_insn (long insn, int *rd, int *ra, int *rb, int *immed)
-{
-  enum microblaze_instr op;
-  enum microblaze_instr_type t2;
-  short t3;
-
-  op = get_insn_microblaze (insn, &t2, &t3);
-  *rd = (insn & RD_MASK) >> RD_LOW;
-  *ra = (insn & RA_MASK) >> RA_LOW;
-  *rb = (insn & RB_MASK) >> RB_LOW;
-  t3 = (insn & IMM_MASK) >> IMM_LOW;
-  *immed = (int) t3;
-  return (op);
-}
-
 unsigned long
 microblaze_get_target_address (long inst, bfd_boolean immfound, int immval,
 			       long pcval, long r1val, long r2val,
