@@ -806,7 +806,6 @@ md_assemble (char * str)
   struct op_code_struct * opcode, *opcode1;
   char * output = NULL;
   int nlen = 0;
-  int i;
   unsigned long inst, inst1;
   unsigned reg1;
   unsigned reg2;
@@ -929,11 +928,6 @@ md_assemble (char * str)
           char *opc;
 	  relax_substateT subtype;
 
-          if (streq (name, "lmi"))
-	    as_fatal (_("lmi pseudo instruction should not use a label in imm field"));
-	  else if (streq (name, "smi"))
-	    as_fatal (_("smi pseudo instruction should not use a label in imm field"));
-
 	  if (reg2 == REG_ROSDP)
 	    opc = str_microblaze_ro_anchor;
 	  else if (reg2 == REG_RWSDP)
@@ -964,45 +958,7 @@ md_assemble (char * str)
           immed = exp.X_add_number;
         }
 
-      if (streq (name, "lmi") || streq (name, "smi"))
-	{
-          /* Load/store 32-d consecutive registers.  Used on exit/entry
-             to subroutines to save and restore registers to stack.
-             Generate 32-d insts.  */
-          int count;
 
-          count = 32 - reg1;
-          if (streq (name, "lmi"))
-            opcode = (struct op_code_struct *) hash_find (opcode_hash_control, "lwi");
-          else
-            opcode = (struct op_code_struct *) hash_find (opcode_hash_control, "swi");
-          if (opcode == NULL)
-            {
-              as_bad (_("unknown opcode \"%s\""), "lwi");
-              return;
-            }
-          inst  = opcode->bit_sequence;
-          inst |= (reg1 << RD_LOW) & RD_MASK;
-          inst |= (reg2 << RA_LOW) & RA_MASK;
-          inst |= (immed << IMM_LOW) & IMM_MASK;
-
-          for (i = 0; i < count - 1; i++)
-	    {
-              output[0] = INST_BYTE0 (inst);
-              output[1] = INST_BYTE1 (inst);
-              output[2] = INST_BYTE2 (inst);
-              output[3] = INST_BYTE3 (inst);
-              output = frag_more (isize);
-              immed = immed + 4;
-              reg1++;
-              inst = opcode->bit_sequence;
-              inst |= (reg1 << RD_LOW) & RD_MASK;
-              inst |= (reg2 << RA_LOW) & RA_MASK;
-              inst |= (immed << IMM_LOW) & IMM_MASK;
-            }
-	}
-      else
-	{
           temp = immed & 0xFFFF8000;
           if ((temp != 0) && (temp != 0xFFFF8000))
 	    {
@@ -1025,7 +981,7 @@ md_assemble (char * str)
 	  inst |= (reg1 << RD_LOW) & RD_MASK;
 	  inst |= (reg2 << RA_LOW) & RA_MASK;
 	  inst |= (immed << IMM_LOW) & IMM_MASK;
-	}
+
       break;
 
     case INST_TYPE_RD_R1_IMM5:
