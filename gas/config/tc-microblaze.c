@@ -1264,18 +1264,8 @@ md_assemble (char * str)
 
       if (reg1 == REG_MSR)
         immed = REG_MSR_MASK;
-      else if (reg1 == REG_PC)
-        immed = REG_PC_MASK;
-      else if (reg1 == REG_EAR)
-        immed = REG_EAR_MASK;
-      else if (reg1 == REG_ESR)
-        immed = REG_ESR_MASK;
       else if (reg1 == REG_FSR)
         immed = REG_FSR_MASK;
-      else if (reg1 == REG_BTR)
-        immed = REG_BTR_MASK;
-      else if (reg1 == REG_EDR)
-        immed = REG_EDR_MASK;
       else if (reg1 == REG_PID)
         immed = REG_PID_MASK;
       else if (reg1 == REG_ZPR)
