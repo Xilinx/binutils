@@ -401,6 +401,15 @@ md_begin (void)
     hash_insert (opcode_hash_control, opcodes[i].name, (char *) &opcodes[i]);
 }
 
+static char *
+check_comma(char *s)
+{
+  if (*s != ',')
+    as_fatal (_("Error in statement syntax"));
+
+  return ++s;
+}
+
 /* Try to parse a reg name.  */
 struct regs {
   const char *name;
@@ -434,9 +443,8 @@ parse_reg (char * s, unsigned * reg)
   unsigned int i;
   unsigned int size = sizeof(register_array)/sizeof(struct regs);
 
-  /* Strip leading whitespace.  */
-  while (ISSPACE (* s))
-    ++ s;
+  if (strcmp (s, "") == 0)
+      as_fatal (_("Error in statement syntax"));
 
   /* Look for special registers */
   for (i = 0; i < size; i++) {
@@ -767,7 +775,7 @@ md_assemble (char * str)
   unsigned isize;
   unsigned int immed, temp;
   expressionS exp;
-  char name[20];
+  char name[20]; // FIXME this is pretty big space only for opcode
 
   /* Find the op code end.  */
   for (op_start = op_end = str;
@@ -798,21 +806,18 @@ md_assemble (char * str)
   inst = opcode->bit_sequence;
   isize = 4;
 
+  /* Strip leading whitespace after removing opcode.  */
+  while (ISSPACE (*op_end))
+    ++op_end;
+
   switch (opcode->inst_type)
     {
     case INST_TYPE_RD_R1_R2:
-      if (strcmp (op_end, ""))
-        op_end = parse_reg (op_end + 1, &reg1);  /* Get rd.  */
-      else
-        as_fatal (_("Error in statement syntax"));
-      if (strcmp (op_end, ""))
-        op_end = parse_reg (op_end + 1, &reg2);  /* Get r1.  */
-      else
-        as_fatal (_("Error in statement syntax"));
-      if (strcmp (op_end, ""))
-        op_end = parse_reg (op_end + 1, &reg3);  /* Get r2.  */
-      else
-        as_fatal (_("Error in statement syntax"));
+      op_end = parse_reg (op_end, &reg1);  /* Get rd.  */
+      op_end = check_comma(op_end);
+      op_end = parse_reg (op_end, &reg2);  /* Get r1.  */
+      op_end = check_comma(op_end);
+      op_end = parse_reg (op_end, &reg3);  /* Get r2.  */
 
       /* Check for spl registers.  */
       if (check_spl_reg (&reg1) || check_spl_reg (&reg2) ||
@@ -827,18 +832,11 @@ md_assemble (char * str)
       break;
 
     case INST_TYPE_RD_R1_IMM:
-      if (strcmp (op_end, ""))
-	op_end = parse_reg (op_end + 1, &reg1);  /* Get rd.  */
-      else
-        as_fatal (_("Error in statement syntax"));
-      if (strcmp (op_end, ""))
-	op_end = parse_reg (op_end + 1, &reg2);  /* Get r1.  */
-      else
-        as_fatal (_("Error in statement syntax"));
-      if (strcmp (op_end, ""))
-	op_end = parse_imm (op_end + 1, & exp, MIN_IMM, MAX_IMM);
-      else
-	as_fatal (_("Error in statement syntax"));
+      op_end = parse_reg (op_end, &reg1);  /* Get rd.  */
+      op_end = check_comma(op_end);
+      op_end = parse_reg (op_end, &reg2);  /* Get r1.  */
+      op_end = check_comma(op_end);
+      op_end = parse_imm (op_end, &exp, MIN_IMM, MAX_IMM);
 
       /* Check for spl registers.  */
       if (check_spl_reg (&reg1) || check_spl_reg (& reg2))
@@ -906,18 +904,11 @@ md_assemble (char * str)
       break;
 
     case INST_TYPE_RD_R1_IMM5:
-      if (strcmp (op_end, ""))
-        op_end = parse_reg (op_end + 1, &reg1);  /* Get rd.  */
-      else
-        as_fatal (_("Error in statement syntax"));
-      if (strcmp (op_end, ""))
-        op_end = parse_reg (op_end + 1, &reg2);  /* Get r1.  */
-      else
-        as_fatal (_("Error in statement syntax"));
-      if (strcmp (op_end, ""))
-        op_end = parse_imm (op_end + 1, & exp, MIN_IMM, MAX_IMM);
-      else
-        as_fatal (_("Error in statement syntax"));
+      op_end = parse_reg (op_end, &reg1);  /* Get rd.  */
+      op_end = check_comma(op_end);
+      op_end = parse_reg (op_end, &reg2);  /* Get r1.  */
+      op_end = check_comma(op_end);
+      op_end = parse_imm (op_end, & exp, MIN_IMM, MAX_IMM);
 
       /* Check for spl registers.  */
       if (check_spl_reg (&reg1) || check_spl_reg (&reg2))
@@ -942,14 +933,9 @@ md_assemble (char * str)
       break;
 
     case INST_TYPE_R1_R2:
-      if (strcmp (op_end, ""))
-        op_end = parse_reg (op_end + 1, &reg1);  /* Get r1.  */
-      else
-        as_fatal (_("Error in statement syntax"));
-      if (strcmp (op_end, ""))
-        op_end = parse_reg (op_end + 1, &reg2);  /* Get r2.  */
-      else
-        as_fatal (_("Error in statement syntax"));
+      op_end = parse_reg (op_end, &reg1);  /* Get r1.  */
+      op_end = check_comma(op_end);
+      op_end = parse_reg (op_end, &reg2);  /* Get r2.  */
 
       /* Check for spl registers.  */
       if (check_spl_reg (& reg1) || check_spl_reg (& reg2))
@@ -961,14 +947,9 @@ md_assemble (char * str)
       break;
 
     case INST_TYPE_RD_R1:
-      if (strcmp (op_end, ""))
-        op_end = parse_reg (op_end + 1, &reg1);  /* Get rd.  */
-      else
-        as_fatal (_("Error in statement syntax"));
-      if (strcmp (op_end, ""))
-        op_end = parse_reg (op_end + 1, &reg2);  /* Get r1.  */
-      else
-        as_fatal (_("Error in statement syntax"));
+      op_end = parse_reg (op_end, &reg1);  /* Get rd.  */
+      op_end = check_comma(op_end);
+      op_end = parse_reg (op_end, &reg2);  /* Get r1.  */
 
       /* Check for spl registers.  */
       if (check_spl_reg (&reg1) || check_spl_reg (&reg2))
@@ -980,14 +961,9 @@ md_assemble (char * str)
       break;
 
     case INST_TYPE_RD_RFSL:
-      if (strcmp (op_end, ""))
-        op_end = parse_reg (op_end + 1, &reg1);  /* Get rd.  */
-      else
-        as_fatal (_("Error in statement syntax"));
-      if (strcmp (op_end, ""))
-        op_end = parse_reg (op_end + 1, &immed);  /* Get rfslN.  */
-      else
-        as_fatal (_("Error in statement syntax"));
+      op_end = parse_reg (op_end, &reg1);  /* Get rd.  */
+      op_end = check_comma(op_end);
+      op_end = parse_reg (op_end, &immed);  /* Get rfslN.  */
 
       /* Check for spl registers.  */
       if (check_spl_reg (&reg1))
@@ -999,15 +975,9 @@ md_assemble (char * str)
       break;
 
     case INST_TYPE_RD_IMM15:
-      if (strcmp (op_end, ""))
-        op_end = parse_reg (op_end + 1, &reg1);  /* Get rd.  */
-      else
-        as_fatal (_("Error in statement syntax"));
-
-      if (strcmp (op_end, ""))
-        op_end = parse_imm (op_end + 1, & exp, MIN_IMM15, MAX_IMM15);
-      else
-        as_fatal (_("Error in statement syntax"));
+      op_end = parse_reg (op_end, &reg1);  /* Get rd.  */
+      op_end = check_comma(op_end);
+      op_end = parse_imm (op_end, & exp, MIN_IMM15, MAX_IMM15);
 
       /* Check for spl registers. */
       if (check_spl_reg (&reg1))
@@ -1025,14 +995,9 @@ md_assemble (char * str)
       break;
 
     case INST_TYPE_R1_RFSL:
-      if (strcmp (op_end, ""))
-        op_end = parse_reg (op_end + 1, &reg1);  /* Get r1.  */
-      else
-        as_fatal (_("Error in statement syntax"));
-      if (strcmp (op_end, ""))
-        op_end = parse_reg (op_end + 1, &immed);  /* Get rfslN.  */
-      else
-        as_fatal (_("Error in statement syntax"));
+      op_end = parse_reg (op_end, &reg1);  /* Get r1.  */
+      op_end = check_comma(op_end);
+      op_end = parse_reg (op_end, &immed);  /* Get rfslN.  */
 
       /* Check for spl registers.  */
       if (check_spl_reg (&reg1))
@@ -1044,10 +1009,8 @@ md_assemble (char * str)
       break;
 
     case INST_TYPE_RFSL:
-      if (strcmp (op_end, ""))
-        op_end = parse_reg (op_end + 1, &immed);  /* Get rfslN.  */
-      else
-        as_fatal (_("Error in statement syntax"));
+      op_end = parse_reg (op_end, &immed);  /* Get rfslN.  */
+
       /* Check for spl registers.  */
       if (check_spl_reg (&reg1))
         as_fatal (_("Cannot use special register with this instruction"));
@@ -1056,10 +1019,7 @@ md_assemble (char * str)
       break;
 
     case INST_TYPE_R1:
-      if (strcmp (op_end, ""))
-        op_end = parse_reg (op_end + 1, &reg1);  /* Get r1.  */
-      else
-        as_fatal (_("Error in statement syntax"));
+      op_end = parse_reg (op_end, &reg1);  /* Get r1.  */
 
       /* Check for spl registers.  */
       if (check_spl_reg (&reg1))
@@ -1070,14 +1030,9 @@ md_assemble (char * str)
       break;
 
     case INST_TYPE_RD_SPECIAL:
-      if (strcmp (op_end, ""))
-        op_end = parse_reg (op_end + 1, &reg1);  /* Get rd.  */
-      else
-        as_fatal (_("Error in statement syntax"));
-      if (strcmp (op_end, ""))
-        op_end = parse_reg (op_end + 1, &reg2);  /* Get r1.  */
-      else
-        as_fatal (_("Error in statement syntax"));
+      op_end = parse_reg (op_end, &reg1);  /* Get rd.  */
+      op_end = check_comma(op_end);
+      op_end = parse_reg (op_end, &reg2);  /* Get r1.  */
 
       if (reg2 == REG_MSR)
         immed = REG_MSR_MASK;
@@ -1117,14 +1072,9 @@ md_assemble (char * str)
       break;
 
     case INST_TYPE_SPECIAL_R1:
-      if (strcmp (op_end, ""))
-        op_end = parse_reg (op_end + 1, &reg1);  /* Get rd.  */
-      else
-        as_fatal (_("Error in statement syntax"));
-      if (strcmp (op_end, ""))
-        op_end = parse_reg (op_end + 1, &reg2);  /* Get r1.  */
-      else
-        as_fatal (_("Error in statement syntax"));
+      op_end = parse_reg (op_end, &reg1);  /* Get rd.  */
+      op_end = check_comma(op_end);
+      op_end = parse_reg (op_end, &reg2);  /* Get r1.  */
 
       if (reg1 == REG_MSR)
         immed = REG_MSR_MASK;
@@ -1155,19 +1105,12 @@ md_assemble (char * str)
       break;
 
     case INST_TYPE_R1_R2_SPECIAL:
-      if (strcmp (op_end, ""))
-        op_end = parse_reg (op_end + 1, &reg1);  /* Get r1.  */
-      else
-        as_fatal (_("Error in statement syntax"));
-      if (strcmp (op_end, ""))
-        op_end = parse_reg (op_end + 1, &reg2);  /* Get r2.  */
-      else
-        as_fatal (_("Error in statement syntax"));
+      op_end = parse_reg (op_end, &reg1);  /* Get r1.  */
+      op_end = check_comma(op_end);
+      op_end = parse_reg (op_end, &reg2);  /* Get r2.  */
 
       /* Check for spl registers.  */
-      if (check_spl_reg (&reg1))
-        as_fatal (_("Cannot use special register with this instruction"));
-      if (check_spl_reg (&reg2))
+      if (check_spl_reg (&reg1) || check_spl_reg (&reg2))
         as_fatal (_("Cannot use special register with this instruction"));
 
       /* insn wic ra, rb => wic ra, ra, rb.  */
@@ -1178,19 +1121,12 @@ md_assemble (char * str)
       break;
 
     case INST_TYPE_RD_R2:
-      if (strcmp (op_end, ""))
-        op_end = parse_reg (op_end + 1, &reg1);  /* Get rd.  */
-      else
-        as_fatal (_("Error in statement syntax"));
-      if (strcmp (op_end, ""))
-        op_end = parse_reg (op_end + 1, &reg2);  /* Get r2.  */
-      else
-        as_fatal (_("Error in statement syntax"));
+      op_end = parse_reg (op_end, &reg1);  /* Get rd.  */
+      op_end = check_comma(op_end);
+      op_end = parse_reg (op_end, &reg2);  /* Get r2.  */
 
       /* Check for spl registers.  */
-      if (check_spl_reg (&reg1))
-        as_fatal (_("Cannot use special register with this instruction"));
-      if (check_spl_reg (&reg2))
+      if (check_spl_reg (&reg1) || check_spl_reg (&reg2))
         as_fatal (_("Cannot use special register with this instruction"));
 
       inst |= (reg1 << RD_LOW) & RD_MASK;
@@ -1199,14 +1135,9 @@ md_assemble (char * str)
       break;
 
     case INST_TYPE_R1_IMM:
-      if (strcmp (op_end, ""))
-        op_end = parse_reg (op_end + 1, &reg1);  /* Get r1.  */
-      else
-        as_fatal (_("Error in statement syntax"));
-      if (strcmp (op_end, ""))
-        op_end = parse_imm (op_end + 1, & exp, MIN_IMM, MAX_IMM);
-      else
-        as_fatal (_("Error in statement syntax"));
+      op_end = parse_reg (op_end, &reg1);  /* Get r1.  */
+      op_end = check_comma(op_end);
+      op_end = parse_imm (op_end, & exp, MIN_IMM, MAX_IMM);
 
       /* Check for spl registers.  */
       if (check_spl_reg (&reg1))
@@ -1263,14 +1194,9 @@ md_assemble (char * str)
       break;
 
     case INST_TYPE_RD_IMM:
-      if (strcmp (op_end, ""))
-        op_end = parse_reg (op_end + 1, &reg1);  /* Get rd.  */
-      else
-        as_fatal (_("Error in statement syntax"));
-      if (strcmp (op_end, ""))
-        op_end = parse_imm (op_end + 1, & exp, MIN_IMM, MAX_IMM);
-      else
-        as_fatal (_("Error in statement syntax"));
+      op_end = parse_reg (op_end, &reg1);  /* Get rd.  */
+      op_end = check_comma(op_end);
+      op_end = parse_imm (op_end, & exp, MIN_IMM, MAX_IMM);
 
       /* Check for spl registers.  */
       if (check_spl_reg (&reg1))
@@ -1327,10 +1253,7 @@ md_assemble (char * str)
       break;
 
     case INST_TYPE_R2:
-      if (strcmp (op_end, ""))
-        op_end = parse_reg (op_end + 1, &reg2);  /* Get r2.  */
-      else
-        as_fatal (_("Error in statement syntax"));
+      op_end = parse_reg (op_end, &reg2);  /* Get r2.  */
 
       /* Check for spl registers.  */
       if (check_spl_reg (&reg2))
@@ -1344,7 +1267,7 @@ md_assemble (char * str)
       if (streq (name, "imm"))
         as_fatal (_("An IMM instruction should not be present in the .s file"));
 
-      op_end = parse_imm (op_end + 1, & exp, MIN_IMM, MAX_IMM);
+      op_end = parse_imm (op_end, & exp, MIN_IMM, MAX_IMM);
 
       if (exp.X_op != O_constant)
 	{
@@ -1400,10 +1323,8 @@ md_assemble (char * str)
       break;
 
     case INST_TYPE_IMM5:
-      if (strcmp(op_end, ""))
-        op_end = parse_imm (op_end + 1, & exp, MIN_IMM5, MAX_IMM5);
-      else
-        as_fatal(_("Error in statement syntax"));
+      op_end = parse_imm (op_end, & exp, MIN_IMM5, MAX_IMM5);
+
       if (exp.X_op != O_constant) {
         as_warn(_("Symbol used as immediate for mbar instruction"));
       } else {
