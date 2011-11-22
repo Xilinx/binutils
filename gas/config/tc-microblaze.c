@@ -402,84 +402,53 @@ md_begin (void)
 }
 
 /* Try to parse a reg name.  */
+struct regs {
+  const char *name;
+  unsigned int reg;
+} register_array[] = {
+  { "rpc",	REG_PC },
+  { "rmsr",	REG_MSR },
+  { "rear",	REG_EAR },
+  { "resr",	REG_ESR },
+  { "rfsr",	REG_FSR },
+  { "rbtr",	REG_BTR },
+  { "redr",	REG_EDR },
+/* MMU registers start.  */
+  { "rpid",	REG_PID },
+  { "rzpr",	REG_ZPR },
+  { "rtlbx",	REG_TLBX },
+  { "rtlblo",	REG_TLBLO },
+  { "rtlbhi",	REG_TLBHI },
+  { "rtlbsx",	REG_TLBSX },
+/* MMU registers end.  */
+  { "rsp",	REG_SP },
+  /* Stack protection registers.  */
+  { "rshr",	REG_SHR },
+  { "rslr",	REG_SLR },
+};
 
 static char *
 parse_reg (char * s, unsigned * reg)
 {
   unsigned tmpreg = 0;
+  unsigned int i;
+  unsigned int size = sizeof(register_array)/sizeof(struct regs);
 
   /* Strip leading whitespace.  */
   while (ISSPACE (* s))
     ++ s;
 
-  if (strncasecmp (s, "rpc", 3) == 0)
-    {
-      *reg = REG_PC;
-      return s + 3;
+  /* Look for special registers */
+  for (i = 0; i < size; i++) {
+    unsigned int stsize = strlen(register_array[i].name);
+    if (strncasecmp (s, register_array[i].name, stsize) == 0) {
+        *reg = register_array[i].reg;
+        return s + stsize;
     }
-  else if (strncasecmp (s, "rmsr", 4) == 0)
-    {
-      *reg = REG_MSR;
-      return s + 4;
-    }
-  else if (strncasecmp (s, "rear", 4) == 0)
-    {
-      *reg = REG_EAR;
-      return s + 4;
-    }
-  else if (strncasecmp (s, "resr", 4) == 0)
-    {
-      *reg = REG_ESR;
-      return s + 4;
-    }
-  else if (strncasecmp (s, "rfsr", 4) == 0)
-    {
-      *reg = REG_FSR;
-      return s + 4;
-    }
-  else if (strncasecmp (s, "rbtr", 4) == 0)
-    {
-      *reg = REG_BTR;
-      return s + 4;
-    }
-  else if (strncasecmp (s, "redr", 4) == 0)
-    {
-      *reg = REG_EDR;
-      return s + 4;
-    }
-  /* MMU registers start.  */
-  else if (strncasecmp (s, "rpid", 4) == 0)
-    {
-      *reg = REG_PID;
-      return s + 4;
-    }
-  else if (strncasecmp (s, "rzpr", 4) == 0)
-    {
-      *reg = REG_ZPR;
-      return s + 4;
-    }
-  else if (strncasecmp (s, "rtlbx", 5) == 0)
-    {
-      *reg = REG_TLBX;
-      return s + 5;
-    }
-  else if (strncasecmp (s, "rtlblo", 6) == 0)
-    {
-      *reg = REG_TLBLO;
-      return s + 6;
-    }
-  else if (strncasecmp (s, "rtlbhi", 6) == 0)
-    {
-      *reg = REG_TLBHI;
-      return s + 6;
-    }
-  else if (strncasecmp (s, "rtlbsx", 6) == 0)
-    {
-      *reg = REG_TLBSX;
-      return s + 6;
-    }
-  /* MMU registers end.  */
-  else if (strncasecmp (s, "rpvr", 4) == 0)
+  }
+
+  /* Handle special cases separately */
+  if (strncasecmp (s, "rpvr", 4) == 0)
     {
       if (ISDIGIT (s[4]) && ISDIGIT (s[5]))
         {
@@ -502,11 +471,6 @@ parse_reg (char * s, unsigned * reg)
           *reg = REG_PVR;
         }
       return s;
-    }
-  else if (strncasecmp (s, "rsp", 3) == 0)
-    {
-      *reg = REG_SP;
-      return s + 3;
     }
   else if (strncasecmp (s, "rfsl", 4) == 0)
     {
@@ -531,17 +495,6 @@ parse_reg (char * s, unsigned * reg)
           *reg = 0;
 	}
       return s;
-    }
-  /* Stack protection registers.  */
-  else if (strncasecmp (s, "rshr", 4) == 0)
-    {
-      *reg = REG_SHR;
-      return s + 4;
-    }
-  else if (strncasecmp (s, "rslr", 4) == 0)
-    {
-      *reg = REG_SLR;
-      return s + 4;
     }
   else
     {
