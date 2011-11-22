@@ -39,7 +39,6 @@
 #define OPTION_EL (OPTION_MD_BASE + 1)
 
 void microblaze_generate_symbol (char *sym);
-static bfd_boolean check_spl_reg (unsigned *);
 
 /* Several places in this file insert raw instructions into the
    object. They should generate the instruction
@@ -724,7 +723,7 @@ parse_cons_expression_microblaze (expressionS *exp, int size)
 static char * str_microblaze_ro_anchor = "RO";
 static char * str_microblaze_rw_anchor = "RW";
 
-static bfd_boolean
+static void
 check_spl_reg (unsigned * reg)
 {
   if ((*reg == REG_MSR)   || (*reg == REG_PC)
@@ -735,9 +734,7 @@ check_spl_reg (unsigned * reg)
       || (*reg == REG_TLBHI) || (*reg == REG_TLBSX)
       || (*reg == REG_SHR)   || (*reg == REG_SLR)
       || (*reg >= REG_PVR+MIN_PVR_REGNUM && *reg <= REG_PVR+MAX_PVR_REGNUM))
-    return TRUE;
-
-  return FALSE;
+    as_fatal (_("Cannot use special register with this instruction"));
 }
 
 /* Here we decide which fixups can be adjusted to make them relative to
@@ -820,9 +817,9 @@ md_assemble (char * str)
       op_end = parse_reg (op_end, &reg3);  /* Get r2.  */
 
       /* Check for spl registers.  */
-      if (check_spl_reg (&reg1) || check_spl_reg (&reg2) ||
-          check_spl_reg (&reg3))
-        as_fatal (_("Cannot use special register with this instruction"));
+      check_spl_reg (&reg1);
+      check_spl_reg (&reg2);
+      check_spl_reg (&reg3);
 
       inst |= (reg1 << RD_LOW) & RD_MASK;
       inst |= (reg2 << RA_LOW) & RA_MASK;
@@ -839,8 +836,8 @@ md_assemble (char * str)
       op_end = parse_imm (op_end, &exp, MIN_IMM, MAX_IMM);
 
       /* Check for spl registers.  */
-      if (check_spl_reg (&reg1) || check_spl_reg (& reg2))
-	as_fatal (_("Cannot use special register with this instruction"));
+      check_spl_reg (&reg1);
+      check_spl_reg (&reg2);
 
       if (exp.X_op != O_constant)
 	{
@@ -911,8 +908,8 @@ md_assemble (char * str)
       op_end = parse_imm (op_end, & exp, MIN_IMM, MAX_IMM);
 
       /* Check for spl registers.  */
-      if (check_spl_reg (&reg1) || check_spl_reg (&reg2))
-         as_fatal (_("Cannot use special register with this instruction"));
+      check_spl_reg (&reg1);
+      check_spl_reg (&reg2);
 
       if (exp.X_op != O_constant)
         as_warn (_("Symbol used as immediate for shift instruction"));
@@ -938,8 +935,8 @@ md_assemble (char * str)
       op_end = parse_reg (op_end, &reg2);  /* Get r2.  */
 
       /* Check for spl registers.  */
-      if (check_spl_reg (& reg1) || check_spl_reg (& reg2))
-         as_fatal (_("Cannot use special register with this instruction"));
+      check_spl_reg (&reg1);
+      check_spl_reg (&reg2);
 
       inst |= (reg1 << RA_LOW) & RA_MASK;
       inst |= (reg2 << RB_LOW) & RB_MASK;
@@ -952,8 +949,8 @@ md_assemble (char * str)
       op_end = parse_reg (op_end, &reg2);  /* Get r1.  */
 
       /* Check for spl registers.  */
-      if (check_spl_reg (&reg1) || check_spl_reg (&reg2))
-        as_fatal (_("Cannot use special register with this instruction"));
+      check_spl_reg (&reg1);
+      check_spl_reg (&reg2);
 
       inst |= (reg1 << RD_LOW) & RD_MASK;
       inst |= (reg2 << RA_LOW) & RA_MASK;
@@ -966,8 +963,7 @@ md_assemble (char * str)
       op_end = parse_reg (op_end, &immed);  /* Get rfslN.  */
 
       /* Check for spl registers.  */
-      if (check_spl_reg (&reg1))
-        as_fatal (_("Cannot use special register with this instruction"));
+      check_spl_reg (&reg1);
 
       inst |= (reg1 << RD_LOW) & RD_MASK;
       inst |= (immed << IMM_LOW) & RFSL_MASK;
@@ -980,8 +976,7 @@ md_assemble (char * str)
       op_end = parse_imm (op_end, & exp, MIN_IMM15, MAX_IMM15);
 
       /* Check for spl registers. */
-      if (check_spl_reg (&reg1))
-        as_fatal (_("Cannot use special register with this instruction"));
+      check_spl_reg (&reg1);
 
       if (exp.X_op != O_constant)
         as_fatal (_("Symbol used as immediate value for msrset/msrclr instructions"));
@@ -1000,8 +995,7 @@ md_assemble (char * str)
       op_end = parse_reg (op_end, &immed);  /* Get rfslN.  */
 
       /* Check for spl registers.  */
-      if (check_spl_reg (&reg1))
-        as_fatal (_("Cannot use special register with this instruction"));
+      check_spl_reg (&reg1);
 
       inst |= (reg1 << RA_LOW) & RA_MASK;
       inst |= (immed << IMM_LOW) & RFSL_MASK;
@@ -1012,8 +1006,8 @@ md_assemble (char * str)
       op_end = parse_reg (op_end, &immed);  /* Get rfslN.  */
 
       /* Check for spl registers.  */
-      if (check_spl_reg (&reg1))
-        as_fatal (_("Cannot use special register with this instruction"));
+      check_spl_reg (&reg1);
+
       inst |= (immed << IMM_LOW) & RFSL_MASK;
       output = frag_more (isize);
       break;
@@ -1022,8 +1016,7 @@ md_assemble (char * str)
       op_end = parse_reg (op_end, &reg1);  /* Get r1.  */
 
       /* Check for spl registers.  */
-      if (check_spl_reg (&reg1))
-        as_fatal (_("Cannot use special register with this instruction"));
+      check_spl_reg (&reg1);
 
       inst |= (reg1 << RA_LOW) & RA_MASK;
       output = frag_more (isize);
@@ -1110,8 +1103,8 @@ md_assemble (char * str)
       op_end = parse_reg (op_end, &reg2);  /* Get r2.  */
 
       /* Check for spl registers.  */
-      if (check_spl_reg (&reg1) || check_spl_reg (&reg2))
-        as_fatal (_("Cannot use special register with this instruction"));
+      check_spl_reg (&reg1);
+      check_spl_reg (&reg2);
 
       /* insn wic ra, rb => wic ra, ra, rb.  */
       inst |= (reg1 << RA_LOW) & RA_MASK;
@@ -1126,8 +1119,8 @@ md_assemble (char * str)
       op_end = parse_reg (op_end, &reg2);  /* Get r2.  */
 
       /* Check for spl registers.  */
-      if (check_spl_reg (&reg1) || check_spl_reg (&reg2))
-        as_fatal (_("Cannot use special register with this instruction"));
+      check_spl_reg (&reg1);
+      check_spl_reg (&reg2);
 
       inst |= (reg1 << RD_LOW) & RD_MASK;
       inst |= (reg2 << RB_LOW) & RB_MASK;
@@ -1140,8 +1133,7 @@ md_assemble (char * str)
       op_end = parse_imm (op_end, & exp, MIN_IMM, MAX_IMM);
 
       /* Check for spl registers.  */
-      if (check_spl_reg (&reg1))
-        as_fatal (_("Cannot use special register with this instruction"));
+      check_spl_reg (&reg1);
 
       if (exp.X_op != O_constant)
 	{
@@ -1199,8 +1191,7 @@ md_assemble (char * str)
       op_end = parse_imm (op_end, & exp, MIN_IMM, MAX_IMM);
 
       /* Check for spl registers.  */
-      if (check_spl_reg (&reg1))
-        as_fatal (_("Cannot use special register with this instruction"));
+      check_spl_reg (&reg1);
 
       if (exp.X_op != O_constant)
 	{
@@ -1256,8 +1247,7 @@ md_assemble (char * str)
       op_end = parse_reg (op_end, &reg2);  /* Get r2.  */
 
       /* Check for spl registers.  */
-      if (check_spl_reg (&reg2))
-        as_fatal (_("Cannot use special register with this instruction"));
+      check_spl_reg (&reg2);
 
       inst |= (reg2 << RB_LOW) & RB_MASK;
       output = frag_more (isize);
