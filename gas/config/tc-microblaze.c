@@ -1295,7 +1295,6 @@ md_assemble (char * str)
       else
         as_fatal (_("invalid value for special purpose register"));
 
-      immed |= 0x4000; /* IMMVAL_MASK_MTS */
       inst |= (reg2 << RA_LOW) & RA_MASK;
       inst |= (immed << IMM_LOW) & IMM_MASK;
       output = frag_more (isize);
