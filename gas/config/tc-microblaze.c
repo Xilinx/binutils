@@ -24,8 +24,8 @@
 #include "bfd.h"
 #include "subsegs.h"
 #define DEFINE_TABLE
-#include "../opcodes/microblaze-opc.h"
-#include "../opcodes/microblaze-opcm.h"
+#include "../opcodes/microblaze-opc.h" /* FIXME - move opc.h to include */
+#include "../opcodes/microblaze-opcm.h" /* FIXME - move opcm.h to include */
 #include "safe-ctype.h"
 #include <string.h>
 #include <dwarf2dbg.h>
@@ -391,13 +391,14 @@ const pseudo_typeS md_pseudo_table[] =
 void
 md_begin (void)
 {
-  struct op_code_struct * opcode;
+  unsigned int i;
+  unsigned int size = sizeof(opcodes)/sizeof(struct op_code_struct);
 
   opcode_hash_control = hash_new ();
 
   /* Insert unique names into hash table.  */
-  for (opcode = opcodes; opcode->name; opcode ++)
-    hash_insert (opcode_hash_control, opcode->name, (char *) opcode);
+  for (i = 0; i < size; i++)
+    hash_insert (opcode_hash_control, opcodes[i].name, (char *) &opcodes[i]);
 }
 
 /* Try to parse a reg name.  */

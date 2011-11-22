@@ -82,8 +82,6 @@ INST_TYPE_NONE,
 #define DELAY_SLOT 1
 #define NO_DELAY_SLOT 0
 
-#define MAX_OPCODES 286
-
 struct op_code_struct
 {
   char * name;
@@ -95,7 +93,7 @@ struct op_code_struct
 				 are set to 0.  */
   unsigned long opcode_mask;  /* Which bits define the opcode.  */
   /* More info about output format here.  */
-} opcodes[MAX_OPCODES] =
+} opcodes[] =
 {
   {"add",   INST_TYPE_RD_R1_R2, INST_NO_OFFSET, NO_DELAY_SLOT, 0x00000000, OPCODE_MASK_H4 },
   {"rsub",  INST_TYPE_RD_R1_R2, INST_NO_OFFSET, NO_DELAY_SLOT, 0x04000000, OPCODE_MASK_H4 },
@@ -373,7 +371,6 @@ struct op_code_struct
   {"necaputd",  INST_TYPE_R1_R2, INST_NO_OFFSET, NO_DELAY_SLOT, 0x4C000760, OPCODE_MASK_H34C },
   {"tnecaputd", INST_TYPE_R2,    INST_NO_OFFSET, NO_DELAY_SLOT, 0x4C0007E0, OPCODE_MASK_H34C },
   {"clz",      INST_TYPE_RD_R1, INST_NO_OFFSET, NO_DELAY_SLOT, 0x900000E0, OPCODE_MASK_H34 },
-  {"", 0, 0, 0, 0, 0},
 };
 
 /* Prefix for register names.  */

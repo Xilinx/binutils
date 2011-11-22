@@ -169,8 +169,9 @@ read_insn_microblaze (bfd_vma memaddr,
 {
   unsigned char       ibytes[4];
   int                 status;
-  struct op_code_struct * op;
+  unsigned int i;
   unsigned long inst;
+  unsigned int size = sizeof(opcodes)/sizeof(struct op_code_struct);
 
   status = info->read_memory_func (memaddr, ibytes, 4, info);
 
@@ -187,12 +188,12 @@ read_insn_microblaze (bfd_vma memaddr,
   else
     abort ();
 
-  /* Just a linear search of the table.  */
-  for (op = opcodes; op->name != 0; op ++)
-    if (op->bit_sequence == (inst & op->opcode_mask))
+  /* Just a linear search of the table.*/
+  for (i = 0; i < size; i++)
+    if (opcodes[i].bit_sequence == (inst & opcodes[i].opcode_mask))
       break;
 
-  *opr = op;
+  *opr = &opcodes[i];
   return inst;
 }
 
