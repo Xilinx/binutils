@@ -815,11 +815,8 @@ md_assemble (char * str)
         as_fatal (_("Error in statement syntax"));
 
       /* Check for spl registers.  */
-      if (check_spl_reg (& reg1))
-        as_fatal (_("Cannot use special register with this instruction"));
-      if (check_spl_reg (& reg2))
-        as_fatal (_("Cannot use special register with this instruction"));
-      if (check_spl_reg (& reg3))
+      if (check_spl_reg (&reg1) || check_spl_reg (&reg2) ||
+          check_spl_reg (&reg3))
         as_fatal (_("Cannot use special register with this instruction"));
 
       inst |= (reg1 << RD_LOW) & RD_MASK;
@@ -844,9 +841,7 @@ md_assemble (char * str)
 	as_fatal (_("Error in statement syntax"));
 
       /* Check for spl registers.  */
-      if (check_spl_reg (& reg1))
-	as_fatal (_("Cannot use special register with this instruction"));
-      if (check_spl_reg (& reg2))
+      if (check_spl_reg (&reg1) || check_spl_reg (& reg2))
 	as_fatal (_("Cannot use special register with this instruction"));
 
       if (exp.X_op != O_constant)
@@ -925,10 +920,8 @@ md_assemble (char * str)
         as_fatal (_("Error in statement syntax"));
 
       /* Check for spl registers.  */
-      if (check_spl_reg (&reg1))
-        as_fatal (_("Cannot use special register with this instruction"));
-      if (check_spl_reg (&reg2))
-        as_fatal (_("Cannot use special register with this instruction"));
+      if (check_spl_reg (&reg1) || check_spl_reg (&reg2))
+         as_fatal (_("Cannot use special register with this instruction"));
 
       if (exp.X_op != O_constant)
         as_warn (_("Symbol used as immediate for shift instruction"));
@@ -959,10 +952,8 @@ md_assemble (char * str)
         as_fatal (_("Error in statement syntax"));
 
       /* Check for spl registers.  */
-      if (check_spl_reg (& reg1))
-        as_fatal (_("Cannot use special register with this instruction"));
-      if (check_spl_reg (& reg2))
-        as_fatal (_("Cannot use special register with this instruction"));
+      if (check_spl_reg (& reg1) || check_spl_reg (& reg2))
+         as_fatal (_("Cannot use special register with this instruction"));
 
       inst |= (reg1 << RA_LOW) & RA_MASK;
       inst |= (reg2 << RB_LOW) & RB_MASK;
@@ -980,9 +971,7 @@ md_assemble (char * str)
         as_fatal (_("Error in statement syntax"));
 
       /* Check for spl registers.  */
-      if (check_spl_reg (&reg1))
-        as_fatal (_("Cannot use special register with this instruction"));
-      if (check_spl_reg (&reg2))
+      if (check_spl_reg (&reg1) || check_spl_reg (&reg2))
         as_fatal (_("Cannot use special register with this instruction"));
 
       inst |= (reg1 << RD_LOW) & RD_MASK;
