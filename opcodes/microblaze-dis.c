@@ -98,7 +98,7 @@ get_field_special (long instr)
   char tmpstr[25];
   char spr[6];
 
-  switch ((instr & IMM_MASK) >> IMM_LOW)
+  switch (instr & IMM14_MASK)
     {
     case REG_MSR_MASK :
       strcpy (spr, "msr");
@@ -146,10 +146,10 @@ get_field_special (long instr)
       strcpy (spr, "slr");
       break;
     default :
-      if ((((instr & IMM_MASK) >> IMM_LOW) & 0xE000) == REG_PVR_MASK)
+      if ((instr & IMM14_MASK & REG_PVR_MASK) == REG_PVR_MASK)
         {
 	  sprintf (tmpstr, "%spvr%d", register_prefix,
-		   (unsigned short)((instr & IMM_MASK) >> IMM_LOW)
+		   (unsigned short)(instr & IMM14_MASK)
 		   ^ REG_PVR_MASK);
 	  return (strdup (tmpstr));
         }

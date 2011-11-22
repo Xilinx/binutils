@@ -90,6 +90,9 @@
 #define RB_MASK 0x0000F800
 #define IMM_MASK 0x0000FFFF
 
+/* MTS/MFS */
+#define IMM14_MASK 0x00003FFF
+
 /* Imm mask for barrel shifts.  */
 #define IMM5_MASK 0x0000001F
 
