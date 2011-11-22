@@ -28,23 +28,23 @@
 /* Gen purpose regs go from 0 to 31.  */
 /* Mask is reg num - max_reg_num, ie reg_num - 32 in this case.  */
 
-#define REG_PC_MASK 0x8000
-#define REG_MSR_MASK 0x8001
-#define REG_EAR_MASK 0x8003
-#define REG_ESR_MASK 0x8005
-#define REG_FSR_MASK 0x8007
-#define REG_BTR_MASK 0x800b
-#define REG_EDR_MASK 0x800d
-#define REG_PVR_MASK 0xa000
-#define REG_SLR_MASK 0x8800
-#define REG_SHR_MASK 0x8802
+#define REG_PC_MASK	0x0000
+#define REG_MSR_MASK	0x0001
+#define REG_EAR_MASK	0x0003
+#define REG_ESR_MASK	0x0005
+#define REG_FSR_MASK	0x0007
+#define REG_BTR_MASK	0x000b
+#define REG_EDR_MASK	0x000d
+#define REG_SLR_MASK	0x0800
+#define REG_SHR_MASK	0x0802
+#define REG_PID_MASK	0x1000
+#define REG_ZPR_MASK	0x1001
+#define REG_TLBX_MASK	0x1002
+#define REG_TLBLO_MASK	0x1003
+#define REG_TLBHI_MASK	0x1004
+#define REG_TLBSX_MASK	0x1005
+#define REG_PVR_MASK	0x2000
 
-#define REG_PID_MASK   0x9000
-#define REG_ZPR_MASK   0x9001
-#define REG_TLBX_MASK  0x9002
-#define REG_TLBLO_MASK 0x9003
-#define REG_TLBHI_MASK 0x9004
-#define REG_TLBSX_MASK 0x9005
 
 #define MIN_REGNUM 0
 #define MAX_REGNUM 31

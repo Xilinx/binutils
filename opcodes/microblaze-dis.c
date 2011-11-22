@@ -93,12 +93,12 @@ get_field_imm15 (long instr)
 }
 
 static char *
-get_field_special (long instr, struct op_code_struct * op)
+get_field_special (long instr)
 {
   char tmpstr[25];
   char spr[6];
 
-  switch ((((instr & IMM_MASK) >> IMM_LOW) ^ op->immval_mask))
+  switch ((instr & IMM_MASK) >> IMM_LOW)
     {
     case REG_MSR_MASK :
       strcpy (spr, "msr");
@@ -146,12 +146,11 @@ get_field_special (long instr, struct op_code_struct * op)
       strcpy (spr, "slr");
       break;
     default :
-      if (((((instr & IMM_MASK) >> IMM_LOW) ^ op->immval_mask) & 0xE000)
-          == REG_PVR_MASK)
+      if ((((instr & IMM_MASK) >> IMM_LOW) & 0xE000) == REG_PVR_MASK)
         {
 	  sprintf (tmpstr, "%spvr%d", register_prefix,
-		   (unsigned short)(((instr & IMM_MASK) >> IMM_LOW)
-                                    ^ op->immval_mask) ^ REG_PVR_MASK);
+		   (unsigned short)((instr & IMM_MASK) >> IMM_LOW)
+		   ^ REG_PVR_MASK);
 	  return (strdup (tmpstr));
         }
       else
@@ -286,10 +285,10 @@ print_insn_microblaze (bfd_vma memaddr, struct disassemble_info * info)
 	  break;
 	case INST_TYPE_RD_SPECIAL:
 	  print_func (stream, "\t%s, %s", get_field_rd (inst),
-		   get_field_special (inst, op));
+		   get_field_special (inst));
 	  break;
 	case INST_TYPE_SPECIAL_R1:
-	  print_func (stream, "\t%s, %s", get_field_special (inst, op),
+	  print_func (stream, "\t%s, %s", get_field_special (inst),
 		   get_field_r1(inst));
 	  break;
 	case INST_TYPE_RD_R1:

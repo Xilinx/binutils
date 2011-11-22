@@ -1210,35 +1210,35 @@ md_assemble (char * str)
         }
 
       if (reg2 == REG_MSR)
-        immed = opcode->immval_mask | REG_MSR_MASK;
+        immed = REG_MSR_MASK;
       else if (reg2 == REG_PC)
-        immed = opcode->immval_mask | REG_PC_MASK;
+        immed = REG_PC_MASK;
       else if (reg2 == REG_EAR)
-        immed = opcode->immval_mask | REG_EAR_MASK;
+        immed = REG_EAR_MASK;
       else if (reg2 == REG_ESR)
-        immed = opcode->immval_mask | REG_ESR_MASK;
+        immed = REG_ESR_MASK;
       else if (reg2 == REG_FSR)
-        immed = opcode->immval_mask | REG_FSR_MASK;
+        immed = REG_FSR_MASK;
       else if (reg2 == REG_BTR)
-        immed = opcode->immval_mask | REG_BTR_MASK;
+        immed = REG_BTR_MASK;
       else if (reg2 == REG_EDR)
-        immed = opcode->immval_mask | REG_EDR_MASK;
+        immed = REG_EDR_MASK;
       else if (reg2 == REG_PID)
-        immed = opcode->immval_mask | REG_PID_MASK;
+        immed = REG_PID_MASK;
       else if (reg2 == REG_ZPR)
-        immed = opcode->immval_mask | REG_ZPR_MASK;
+        immed = REG_ZPR_MASK;
       else if (reg2 == REG_TLBX)
-        immed = opcode->immval_mask | REG_TLBX_MASK;
+        immed = REG_TLBX_MASK;
       else if (reg2 == REG_TLBLO)
-        immed = opcode->immval_mask | REG_TLBLO_MASK;
+        immed = REG_TLBLO_MASK;
       else if (reg2 == REG_TLBHI)
-        immed = opcode->immval_mask | REG_TLBHI_MASK;
+        immed = REG_TLBHI_MASK;
       else if (reg2 == REG_SHR)
-        immed = opcode->immval_mask | REG_SHR_MASK;
+        immed = REG_SHR_MASK;
       else if (reg2 == REG_SLR)
-        immed = opcode->immval_mask | REG_SLR_MASK;
+        immed = REG_SLR_MASK;
       else if (reg2 >= (REG_PVR+MIN_PVR_REGNUM) && reg2 <= (REG_PVR+MAX_PVR_REGNUM))
-	immed = opcode->immval_mask | REG_PVR_MASK | reg2;
+	immed = REG_PVR_MASK | reg2;
       else
         as_fatal (_("invalid value for special purpose register"));
       inst |= (reg1 << RD_LOW) & RD_MASK;
@@ -1263,37 +1263,39 @@ md_assemble (char * str)
         }
 
       if (reg1 == REG_MSR)
-        immed = opcode->immval_mask | REG_MSR_MASK;
+        immed = REG_MSR_MASK;
       else if (reg1 == REG_PC)
-        immed = opcode->immval_mask | REG_PC_MASK;
+        immed = REG_PC_MASK;
       else if (reg1 == REG_EAR)
-        immed = opcode->immval_mask | REG_EAR_MASK;
+        immed = REG_EAR_MASK;
       else if (reg1 == REG_ESR)
-        immed = opcode->immval_mask | REG_ESR_MASK;
+        immed = REG_ESR_MASK;
       else if (reg1 == REG_FSR)
-        immed = opcode->immval_mask | REG_FSR_MASK;
+        immed = REG_FSR_MASK;
       else if (reg1 == REG_BTR)
-        immed = opcode->immval_mask | REG_BTR_MASK;
+        immed = REG_BTR_MASK;
       else if (reg1 == REG_EDR)
-        immed = opcode->immval_mask | REG_EDR_MASK;
+        immed = REG_EDR_MASK;
       else if (reg1 == REG_PID)
-        immed = opcode->immval_mask | REG_PID_MASK;
+        immed = REG_PID_MASK;
       else if (reg1 == REG_ZPR)
-        immed = opcode->immval_mask | REG_ZPR_MASK;
+        immed = REG_ZPR_MASK;
       else if (reg1 == REG_TLBX)
-        immed = opcode->immval_mask | REG_TLBX_MASK;
+        immed = REG_TLBX_MASK;
       else if (reg1 == REG_TLBLO)
-        immed = opcode->immval_mask | REG_TLBLO_MASK;
+        immed = REG_TLBLO_MASK;
       else if (reg1 == REG_TLBHI)
-        immed = opcode->immval_mask | REG_TLBHI_MASK;
+        immed = REG_TLBHI_MASK;
       else if (reg1 == REG_TLBSX)
-        immed = opcode->immval_mask | REG_TLBSX_MASK;
+        immed = REG_TLBSX_MASK;
       else if (reg1 == REG_SHR)
-        immed = opcode->immval_mask | REG_SHR_MASK;
+        immed = REG_SHR_MASK;
       else if (reg1 == REG_SLR)
-        immed = opcode->immval_mask | REG_SLR_MASK;
+        immed = REG_SLR_MASK;
       else
         as_fatal (_("invalid value for special purpose register"));
+
+      immed |= 0x4000; /* IMMVAL_MASK_MTS */
       inst |= (reg2 << RA_LOW) & RA_MASK;
       inst |= (immed << IMM_LOW) & IMM_MASK;
       output = frag_more (isize);
