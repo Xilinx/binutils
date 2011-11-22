@@ -769,10 +769,6 @@ md_assemble (char * str)
   expressionS exp;
   char name[20];
 
-  /* Drop leading whitespace.  */
-  while (ISSPACE (* str))
-    str ++;
-
   /* Find the op code end.  */
   for (op_start = op_end = str;
        *op_end && !is_end_of_line[(unsigned char) *op_end] && *op_end != ' ';
