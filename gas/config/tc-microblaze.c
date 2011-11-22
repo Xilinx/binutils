@@ -831,19 +831,10 @@ md_assemble (char * str)
       if (check_spl_reg (& reg3))
         as_fatal (_("Cannot use special register with this instruction"));
 
-      if (streq (name, "sub"))
-	{
-          /* sub rd, r1, r2 becomes rsub rd, r2, r1.  */
-          inst |= (reg1 << RD_LOW) & RD_MASK;
-          inst |= (reg3 << RA_LOW) & RA_MASK;
-          inst |= (reg2 << RB_LOW) & RB_MASK;
-        }
-      else
-        {
-          inst |= (reg1 << RD_LOW) & RD_MASK;
-          inst |= (reg2 << RA_LOW) & RA_MASK;
-          inst |= (reg3 << RB_LOW) & RB_MASK;
-        }
+      inst |= (reg1 << RD_LOW) & RD_MASK;
+      inst |= (reg2 << RA_LOW) & RA_MASK;
+      inst |= (reg3 << RB_LOW) & RB_MASK;
+
       output = frag_more (isize);
       break;
 
