@@ -61,14 +61,13 @@
 #define REG_EDR 45 /* Exception reg.  */
 #define REG_SHR 50 /* Stack High reg.  */
 #define REG_SLR 51 /* Stack Low reg.  */
-#define REG_PVR 40960 /* Program Verification reg.  */
-
-#define REG_PID   36864 /* MMU: Process ID reg.  */
-#define REG_ZPR   36865 /* MMU: Zone Protect reg.  */
-#define REG_TLBX  36866 /* MMU: TLB Index reg.  */
-#define REG_TLBLO 36867 /* MMU: TLB Low reg.  */
-#define REG_TLBHI 36868 /* MMU: TLB High reg.  */
-#define REG_TLBSX 36869 /* MMU: TLB Search Index reg.  */
+#define REG_PVR   0xA000 /* Program Verification reg.  */
+#define REG_PID   0x9000 /* MMU: Process ID reg.  */
+#define REG_ZPR   0x9001 /* MMU: Zone Protect reg.  */
+#define REG_TLBX  0x9002 /* MMU: TLB Index reg.  */
+#define REG_TLBLO 0x9003 /* MMU: TLB Low reg.  */
+#define REG_TLBHI 0x9004 /* MMU: TLB High reg.  */
+#define REG_TLBSX 0x9005 /* MMU: TLB Search Index reg.  */
 
 /* Alternate names for gen purpose regs.  */
 #define REG_SP  1 /* stack pointer.  */
