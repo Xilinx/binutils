@@ -61,8 +61,7 @@ INST_TYPE_NONE,
 #define OPCODE_MASK_H2  0xFC1F0000  /* High 6 and bits 20-16.  */
 #define OPCODE_MASK_H12 0xFFFF0000  /* High 16.  */
 #define OPCODE_MASK_H4  0xFC0007FF  /* High 6 and low 11 bits.  */
-#define OPCODE_MASK_H13S 0xFFE0E7F0 /* High 11 16:18 21:27 bits, 19:20 bits
-                                       and last nibble of last byte for spr.  */
+#define OPCODE_MASK_H13S 0xFFE0C000 /* High 11 16:18 */
 #define OPCODE_MASK_H23S 0xFC1FC000 /* High 6, 20-16 and 15:1 bits and last
 				       nibble of last byte for spr.  */
 #define OPCODE_MASK_H34 0xFC00FFFF  /* High 6 and low 16 bits.  */
