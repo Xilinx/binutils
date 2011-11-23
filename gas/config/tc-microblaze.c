@@ -481,25 +481,24 @@ struct regs {
   const char *name;
   unsigned int reg;
 } register_array[] = {
-  { "rpc",	REG_PC },
-  { "rmsr",	REG_MSR },
-  { "rear",	REG_EAR },
-  { "resr",	REG_ESR },
-  { "rfsr",	REG_FSR },
-  { "rbtr",	REG_BTR },
-  { "redr",	REG_EDR },
+  { "rpc",	REG_PC_MASK },
+  { "rmsr",	REG_MSR_MASK },
+  { "rear",	REG_EAR_MASK },
+  { "resr",	REG_ESR_MASK },
+  { "rfsr",	REG_FSR_MASK },
+  { "rbtr",	REG_BTR_MASK },
+  { "redr",	REG_EDR_MASK },
 /* MMU registers start.  */
-  { "rpid",	REG_PID },
-  { "rzpr",	REG_ZPR },
-  { "rtlbx",	REG_TLBX },
-  { "rtlblo",	REG_TLBLO },
-  { "rtlbhi",	REG_TLBHI },
-  { "rtlbsx",	REG_TLBSX },
+  { "rpid",	REG_PID_MASK },
+  { "rzpr",	REG_ZPR_MASK },
+  { "rtlbx",	REG_TLBX_MASK },
+  { "rtlblo",	REG_TLBLO_MASK },
+  { "rtlbhi",	REG_TLBHI_MASK },
+  { "rtlbsx",	REG_TLBSX_MASK },
 /* MMU registers end.  */
-  { "rsp",	REG_SP },
   /* Stack protection registers.  */
-  { "rshr",	REG_SHR },
-  { "rslr",	REG_SLR },
+  { "rshr",	REG_SHR_MASK },
+  { "rslr",	REG_SLR_MASK },
 };
 
 static char *
@@ -533,7 +532,7 @@ parse_reg (char * s, unsigned * reg)
         }
 
       if ((int) tmpreg >= MIN_PVR_REGNUM && tmpreg <= MAX_PVR_REGNUM)
-        *reg = REG_PVR + tmpreg;
+        *reg = REG_PVR_MASK + tmpreg;
       else
           as_fatal (_("Invalid register number at '%.6s'"), s);
 
@@ -734,14 +733,14 @@ static char * str_microblaze_rw_anchor = "RW";
 static void
 check_spl_reg (unsigned * reg)
 {
-  if ((*reg == REG_MSR)   || (*reg == REG_PC)
-      || (*reg == REG_EAR)   || (*reg == REG_ESR)
-      || (*reg == REG_FSR)   || (*reg == REG_BTR) || (*reg == REG_EDR)
-      || (*reg == REG_PID)   || (*reg == REG_ZPR)
-      || (*reg == REG_TLBX)  || (*reg == REG_TLBLO)
-      || (*reg == REG_TLBHI) || (*reg == REG_TLBSX)
-      || (*reg == REG_SHR)   || (*reg == REG_SLR)
-      || (*reg >= REG_PVR+MIN_PVR_REGNUM && *reg <= REG_PVR+MAX_PVR_REGNUM))
+  if ((*reg == REG_MSR_MASK)   || (*reg == REG_PC_MASK)
+      || (*reg == REG_EAR_MASK)   || (*reg == REG_ESR_MASK)
+      || (*reg == REG_FSR_MASK)   || (*reg == REG_BTR_MASK) || (*reg == REG_EDR_MASK)
+      || (*reg == REG_PID_MASK)   || (*reg == REG_ZPR_MASK)
+      || (*reg == REG_TLBX_MASK)  || (*reg == REG_TLBLO_MASK)
+      || (*reg == REG_TLBHI_MASK) || (*reg == REG_TLBSX_MASK)
+      || (*reg == REG_SHR_MASK)   || (*reg == REG_SLR_MASK)
+      || (*reg >= REG_PVR_MASK + MIN_PVR_REGNUM && *reg <= REG_PVR_MASK + MAX_PVR_REGNUM))
     as_fatal (_("Cannot use special register with this instruction"));
 }
 
@@ -999,38 +998,29 @@ md_assemble (char * str)
       op_end = check_comma(op_end);
       op_end = parse_reg (op_end, &reg2);  /* Get r1.  */
 
-      if (reg2 == REG_MSR)
-        immed = REG_MSR_MASK;
-      else if (reg2 == REG_PC)
-        immed = REG_PC_MASK;
-      else if (reg2 == REG_EAR)
-        immed = REG_EAR_MASK;
-      else if (reg2 == REG_ESR)
-        immed = REG_ESR_MASK;
-      else if (reg2 == REG_FSR)
-        immed = REG_FSR_MASK;
-      else if (reg2 == REG_BTR)
-        immed = REG_BTR_MASK;
-      else if (reg2 == REG_EDR)
-        immed = REG_EDR_MASK;
-      else if (reg2 == REG_PID)
-        immed = REG_PID_MASK;
-      else if (reg2 == REG_ZPR)
-        immed = REG_ZPR_MASK;
-      else if (reg2 == REG_TLBX)
-        immed = REG_TLBX_MASK;
-      else if (reg2 == REG_TLBLO)
-        immed = REG_TLBLO_MASK;
-      else if (reg2 == REG_TLBHI)
-        immed = REG_TLBHI_MASK;
-      else if (reg2 == REG_SHR)
-        immed = REG_SHR_MASK;
-      else if (reg2 == REG_SLR)
-        immed = REG_SLR_MASK;
-      else if (reg2 >= (REG_PVR+MIN_PVR_REGNUM) && reg2 <= (REG_PVR+MAX_PVR_REGNUM))
-	immed = REG_PVR_MASK | reg2;
-      else
-        as_fatal (_("invalid value for special purpose register"));
+      switch (reg2)
+        {
+        case REG_MSR_MASK:
+        case REG_PC_MASK:
+        case REG_EAR_MASK:
+        case REG_ESR_MASK:
+        case REG_FSR_MASK:
+        case REG_BTR_MASK:
+        case REG_EDR_MASK:
+        case REG_PID_MASK:
+        case REG_ZPR_MASK:
+        case REG_TLBX_MASK:
+        case REG_TLBLO_MASK:
+        case REG_TLBHI_MASK:
+        case REG_SHR_MASK:
+        case REG_SLR_MASK:
+        case (REG_PVR_MASK + MIN_PVR_REGNUM) ... (REG_PVR_MASK + MAX_PVR_REGNUM):
+          immed = reg2;
+          break;
+        default:
+          as_fatal (_("invalid value for special purpose register"));
+        }
+
       inst |= (reg1 << RD_LOW) & RD_MASK;
       inst |= (immed << IMM_LOW) & IMM_MASK;
       output = frag_more (isize);
@@ -1041,28 +1031,23 @@ md_assemble (char * str)
       op_end = check_comma(op_end);
       op_end = parse_gpr (op_end, &reg2);  /* Get r1.  */
 
-      if (reg1 == REG_MSR)
-        immed = REG_MSR_MASK;
-      else if (reg1 == REG_FSR)
-        immed = REG_FSR_MASK;
-      else if (reg1 == REG_PID)
-        immed = REG_PID_MASK;
-      else if (reg1 == REG_ZPR)
-        immed = REG_ZPR_MASK;
-      else if (reg1 == REG_TLBX)
-        immed = REG_TLBX_MASK;
-      else if (reg1 == REG_TLBLO)
-        immed = REG_TLBLO_MASK;
-      else if (reg1 == REG_TLBHI)
-        immed = REG_TLBHI_MASK;
-      else if (reg1 == REG_TLBSX)
-        immed = REG_TLBSX_MASK;
-      else if (reg1 == REG_SHR)
-        immed = REG_SHR_MASK;
-      else if (reg1 == REG_SLR)
-        immed = REG_SLR_MASK;
-      else
-        as_fatal (_("invalid value for special purpose register"));
+      switch (reg1)
+        {
+        case REG_MSR_MASK:
+        case REG_FSR_MASK:
+        case REG_PID_MASK:
+        case REG_ZPR_MASK:
+        case REG_TLBX_MASK:
+        case REG_TLBLO_MASK:
+        case REG_TLBHI_MASK:
+        case REG_TLBSX_MASK:
+        case REG_SHR_MASK:
+        case REG_SLR_MASK:
+          immed = reg1;
+          break;
+        default:
+          as_fatal (_("invalid value for special purpose register"));
+        }
 
       inst |= (reg2 << RA_LOW) & RA_MASK;
       inst |= (immed << IMM_LOW) & IMM_MASK;

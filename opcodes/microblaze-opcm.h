@@ -27,25 +27,6 @@
 
 /* Gen purpose regs go from 0 to 31.  */
 /* Mask is reg num - max_reg_num, ie reg_num - 32 in this case.  */
-
-#define REG_PC_MASK	0x0000
-#define REG_MSR_MASK	0x0001
-#define REG_EAR_MASK	0x0003
-#define REG_ESR_MASK	0x0005
-#define REG_FSR_MASK	0x0007
-#define REG_BTR_MASK	0x000b
-#define REG_EDR_MASK	0x000d
-#define REG_SLR_MASK	0x0800
-#define REG_SHR_MASK	0x0802
-#define REG_PID_MASK	0x1000
-#define REG_ZPR_MASK	0x1001
-#define REG_TLBX_MASK	0x1002
-#define REG_TLBLO_MASK	0x1003
-#define REG_TLBHI_MASK	0x1004
-#define REG_TLBSX_MASK	0x1005
-#define REG_PVR_MASK	0x2000
-
-
 #define MIN_REGNUM 0
 #define MAX_REGNUM 31
 
@@ -55,22 +36,23 @@
 #define MIN_FSL_REGNUM 0
 #define MAX_FSL_REGNUM 15
 
-#define REG_PC  32 /* PC.  */
-#define REG_MSR 33 /* Machine status reg.  */
-#define REG_EAR 35 /* Exception reg.  */
-#define REG_ESR 37 /* Exception reg.  */
-#define REG_FSR 39 /* FPU Status reg.  */
-#define REG_BTR 43 /* Branch Target reg.  */
-#define REG_EDR 45 /* Exception reg.  */
-#define REG_SHR 50 /* Stack High reg.  */
-#define REG_SLR 51 /* Stack Low reg.  */
-#define REG_PVR   0xA000 /* Program Verification reg.  */
-#define REG_PID   0x9000 /* MMU: Process ID reg.  */
-#define REG_ZPR   0x9001 /* MMU: Zone Protect reg.  */
-#define REG_TLBX  0x9002 /* MMU: TLB Index reg.  */
-#define REG_TLBLO 0x9003 /* MMU: TLB Low reg.  */
-#define REG_TLBHI 0x9004 /* MMU: TLB High reg.  */
-#define REG_TLBSX 0x9005 /* MMU: TLB Search Index reg.  */
+
+#define REG_PC_MASK	0x0000 /* PC.  */
+#define REG_MSR_MASK	0x0001 /* Machine status reg.  */
+#define REG_EAR_MASK	0x0003 /* Exception reg.  */
+#define REG_ESR_MASK	0x0005 /* Exception reg.  */
+#define REG_FSR_MASK	0x0007 /* FPU Status reg.  */
+#define REG_BTR_MASK	0x000b /* Branch Target reg.  */
+#define REG_EDR_MASK	0x000d /* Exception reg.  */
+#define REG_SLR_MASK	0x0800 /* Stack Low reg.  */
+#define REG_SHR_MASK	0x0802 /* Stack High reg.  */
+#define REG_PID_MASK	0x1000 /* MMU: Process ID reg.  */
+#define REG_ZPR_MASK	0x1001 /* MMU: Zone Protect reg.  */
+#define REG_TLBX_MASK	0x1002 /* MMU: TLB Index reg.  */
+#define REG_TLBLO_MASK	0x1003 /* MMU: TLB Low reg.  */
+#define REG_TLBHI_MASK	0x1004 /* MMU: TLB High reg.  */
+#define REG_TLBSX_MASK	0x1005 /* MMU: TLB Search Index reg.  */
+#define REG_PVR_MASK	0x2000 /* Processor Version reg.  */
 
 /* Alternate names for gen purpose regs.  */
 #define REG_SP  1 /* stack pointer.  */
