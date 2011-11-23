@@ -400,6 +400,10 @@ md_begin (void)
     hash_insert (opcode_hash_control, opcodes[i].name, (char *) &opcodes[i]);
 }
 
+/* Declaration */
+static void check_spl_reg (unsigned * reg);
+static char *parse_reg (char * s, unsigned * reg);
+
 static char *
 check_comma(char *s)
 {
@@ -407,6 +411,40 @@ check_comma(char *s)
     as_fatal (_("Error in statement syntax"));
 
   return ++s;
+}
+
+static char *
+parse_gpr (char * s, unsigned * reg)
+{
+  unsigned tmpreg = 0;
+
+  if (strcmp (s, "") == 0)
+      as_fatal (_("Error in statement syntax"));
+
+  if (TOLOWER (s[0]) == 'r' && ISDIGIT (s[1]))
+    {
+      tmpreg = s[1] - '0';
+      s += 2;
+      if (ISDIGIT (s[0]))
+        {
+          tmpreg = tmpreg * 10 + s[0] - '0';
+          s += 1;
+        }
+
+      if ((int)tmpreg >= MIN_REGNUM && tmpreg <= MAX_REGNUM)
+        *reg = tmpreg;
+      else
+         as_bad (_("Invalid register number at '%.6s'"), s);
+
+      return s;
+    }
+
+  /* Check for spl registers.  */
+  parse_reg (s, &tmpreg);
+  check_spl_reg (&tmpreg);
+
+  /* as_bad (_("register expected, but saw '%.6s'"), s); */
+  return s;
 }
 
 /* Try to parse a reg name.  */
@@ -503,35 +541,7 @@ parse_reg (char * s, unsigned * reg)
 	}
       return s;
     }
-  else
-    {
-      if (TOLOWER (s[0]) == 'r')
-        {
-          if (ISDIGIT (s[1]) && ISDIGIT (s[2]))
-            {
-              tmpreg = (s[1] - '0') * 10 + s[2] - '0';
-              s += 3;
-            }
-          else if (ISDIGIT (s[1]))
-            {
-              tmpreg = s[1] - '0';
-              s += 2;
-            }
-          else
-            as_bad (_("register expected, but saw '%.6s'"), s);
-
-          if ((int)tmpreg >= MIN_REGNUM && tmpreg <= MAX_REGNUM)
-            *reg = tmpreg;
-          else
-	    {
-              as_bad (_("Invalid register number at '%.6s'"), s);
-              *reg = 0;
-	    }
-          return s;
-        }
-    }
   as_bad (_("register expected, but saw '%.6s'"), s);
-  *reg = 0;
   return s;
 }
 
@@ -810,16 +820,11 @@ md_assemble (char * str)
   switch (opcode->inst_type)
     {
     case INST_TYPE_RD_R1_R2:
-      op_end = parse_reg (op_end, &reg1);  /* Get rd.  */
+      op_end = parse_gpr (op_end, &reg1);  /* Get rd.  */
       op_end = check_comma(op_end);
-      op_end = parse_reg (op_end, &reg2);  /* Get r1.  */
+      op_end = parse_gpr (op_end, &reg2);  /* Get r1.  */
       op_end = check_comma(op_end);
-      op_end = parse_reg (op_end, &reg3);  /* Get r2.  */
-
-      /* Check for spl registers.  */
-      check_spl_reg (&reg1);
-      check_spl_reg (&reg2);
-      check_spl_reg (&reg3);
+      op_end = parse_gpr (op_end, &reg3);  /* Get r2.  */
 
       inst |= (reg1 << RD_LOW) & RD_MASK;
       inst |= (reg2 << RA_LOW) & RA_MASK;
@@ -829,15 +834,11 @@ md_assemble (char * str)
       break;
 
     case INST_TYPE_RD_R1_IMM:
-      op_end = parse_reg (op_end, &reg1);  /* Get rd.  */
+      op_end = parse_gpr (op_end, &reg1);  /* Get rd.  */
       op_end = check_comma(op_end);
-      op_end = parse_reg (op_end, &reg2);  /* Get r1.  */
+      op_end = parse_gpr (op_end, &reg2);  /* Get r1.  */
       op_end = check_comma(op_end);
       op_end = parse_imm (op_end, &exp, MIN_IMM, MAX_IMM);
-
-      /* Check for spl registers.  */
-      check_spl_reg (&reg1);
-      check_spl_reg (&reg2);
 
       if (exp.X_op != O_constant)
 	{
@@ -901,15 +902,11 @@ md_assemble (char * str)
       break;
 
     case INST_TYPE_RD_R1_IMM5:
-      op_end = parse_reg (op_end, &reg1);  /* Get rd.  */
+      op_end = parse_gpr (op_end, &reg1);  /* Get rd.  */
       op_end = check_comma(op_end);
-      op_end = parse_reg (op_end, &reg2);  /* Get r1.  */
+      op_end = parse_gpr (op_end, &reg2);  /* Get r1.  */
       op_end = check_comma(op_end);
       op_end = parse_imm (op_end, & exp, MIN_IMM, MAX_IMM);
-
-      /* Check for spl registers.  */
-      check_spl_reg (&reg1);
-      check_spl_reg (&reg2);
 
       if (exp.X_op != O_constant)
         as_warn (_("Symbol used as immediate for shift instruction"));
@@ -930,13 +927,9 @@ md_assemble (char * str)
       break;
 
     case INST_TYPE_R1_R2:
-      op_end = parse_reg (op_end, &reg1);  /* Get r1.  */
+      op_end = parse_gpr (op_end, &reg1);  /* Get r1.  */
       op_end = check_comma(op_end);
-      op_end = parse_reg (op_end, &reg2);  /* Get r2.  */
-
-      /* Check for spl registers.  */
-      check_spl_reg (&reg1);
-      check_spl_reg (&reg2);
+      op_end = parse_gpr (op_end, &reg2);  /* Get r2.  */
 
       inst |= (reg1 << RA_LOW) & RA_MASK;
       inst |= (reg2 << RB_LOW) & RB_MASK;
@@ -944,13 +937,9 @@ md_assemble (char * str)
       break;
 
     case INST_TYPE_RD_R1:
-      op_end = parse_reg (op_end, &reg1);  /* Get rd.  */
+      op_end = parse_gpr (op_end, &reg1);  /* Get rd.  */
       op_end = check_comma(op_end);
-      op_end = parse_reg (op_end, &reg2);  /* Get r1.  */
-
-      /* Check for spl registers.  */
-      check_spl_reg (&reg1);
-      check_spl_reg (&reg2);
+      op_end = parse_gpr (op_end, &reg2);  /* Get r1.  */
 
       inst |= (reg1 << RD_LOW) & RD_MASK;
       inst |= (reg2 << RA_LOW) & RA_MASK;
@@ -958,12 +947,9 @@ md_assemble (char * str)
       break;
 
     case INST_TYPE_RD_RFSL:
-      op_end = parse_reg (op_end, &reg1);  /* Get rd.  */
+      op_end = parse_gpr (op_end, &reg1);  /* Get rd.  */
       op_end = check_comma(op_end);
       op_end = parse_reg (op_end, &immed);  /* Get rfslN.  */
-
-      /* Check for spl registers.  */
-      check_spl_reg (&reg1);
 
       inst |= (reg1 << RD_LOW) & RD_MASK;
       inst |= (immed << IMM_LOW) & RFSL_MASK;
@@ -971,12 +957,9 @@ md_assemble (char * str)
       break;
 
     case INST_TYPE_RD_IMM15:
-      op_end = parse_reg (op_end, &reg1);  /* Get rd.  */
+      op_end = parse_gpr (op_end, &reg1);  /* Get rd.  */
       op_end = check_comma(op_end);
       op_end = parse_imm (op_end, & exp, MIN_IMM15, MAX_IMM15);
-
-      /* Check for spl registers. */
-      check_spl_reg (&reg1);
 
       if (exp.X_op != O_constant)
         as_fatal (_("Symbol used as immediate value for msrset/msrclr instructions"));
@@ -990,12 +973,9 @@ md_assemble (char * str)
       break;
 
     case INST_TYPE_R1_RFSL:
-      op_end = parse_reg (op_end, &reg1);  /* Get r1.  */
+      op_end = parse_gpr (op_end, &reg1);  /* Get r1.  */
       op_end = check_comma(op_end);
       op_end = parse_reg (op_end, &immed);  /* Get rfslN.  */
-
-      /* Check for spl registers.  */
-      check_spl_reg (&reg1);
 
       inst |= (reg1 << RA_LOW) & RA_MASK;
       inst |= (immed << IMM_LOW) & RFSL_MASK;
@@ -1005,25 +985,19 @@ md_assemble (char * str)
     case INST_TYPE_RFSL:
       op_end = parse_reg (op_end, &immed);  /* Get rfslN.  */
 
-      /* Check for spl registers.  */
-      check_spl_reg (&reg1);
-
       inst |= (immed << IMM_LOW) & RFSL_MASK;
       output = frag_more (isize);
       break;
 
     case INST_TYPE_R1:
-      op_end = parse_reg (op_end, &reg1);  /* Get r1.  */
-
-      /* Check for spl registers.  */
-      check_spl_reg (&reg1);
+      op_end = parse_gpr (op_end, &reg1);  /* Get r1.  */
 
       inst |= (reg1 << RA_LOW) & RA_MASK;
       output = frag_more (isize);
       break;
 
     case INST_TYPE_RD_SPECIAL:
-      op_end = parse_reg (op_end, &reg1);  /* Get rd.  */
+      op_end = parse_gpr (op_end, &reg1);  /* Get rd.  */
       op_end = check_comma(op_end);
       op_end = parse_reg (op_end, &reg2);  /* Get r1.  */
 
@@ -1067,7 +1041,7 @@ md_assemble (char * str)
     case INST_TYPE_SPECIAL_R1:
       op_end = parse_reg (op_end, &reg1);  /* Get rd.  */
       op_end = check_comma(op_end);
-      op_end = parse_reg (op_end, &reg2);  /* Get r1.  */
+      op_end = parse_gpr (op_end, &reg2);  /* Get r1.  */
 
       if (reg1 == REG_MSR)
         immed = REG_MSR_MASK;
@@ -1098,13 +1072,9 @@ md_assemble (char * str)
       break;
 
     case INST_TYPE_R1_R2_SPECIAL:
-      op_end = parse_reg (op_end, &reg1);  /* Get r1.  */
+      op_end = parse_gpr (op_end, &reg1);  /* Get r1.  */
       op_end = check_comma(op_end);
-      op_end = parse_reg (op_end, &reg2);  /* Get r2.  */
-
-      /* Check for spl registers.  */
-      check_spl_reg (&reg1);
-      check_spl_reg (&reg2);
+      op_end = parse_gpr (op_end, &reg2);  /* Get r2.  */
 
       /* insn wic ra, rb => wic ra, ra, rb.  */
       inst |= (reg1 << RA_LOW) & RA_MASK;
@@ -1114,13 +1084,9 @@ md_assemble (char * str)
       break;
 
     case INST_TYPE_RD_R2:
-      op_end = parse_reg (op_end, &reg1);  /* Get rd.  */
+      op_end = parse_gpr (op_end, &reg1);  /* Get rd.  */
       op_end = check_comma(op_end);
-      op_end = parse_reg (op_end, &reg2);  /* Get r2.  */
-
-      /* Check for spl registers.  */
-      check_spl_reg (&reg1);
-      check_spl_reg (&reg2);
+      op_end = parse_gpr (op_end, &reg2);  /* Get r2.  */
 
       inst |= (reg1 << RD_LOW) & RD_MASK;
       inst |= (reg2 << RB_LOW) & RB_MASK;
@@ -1128,12 +1094,9 @@ md_assemble (char * str)
       break;
 
     case INST_TYPE_R1_IMM:
-      op_end = parse_reg (op_end, &reg1);  /* Get r1.  */
+      op_end = parse_gpr (op_end, &reg1);  /* Get r1.  */
       op_end = check_comma(op_end);
       op_end = parse_imm (op_end, & exp, MIN_IMM, MAX_IMM);
-
-      /* Check for spl registers.  */
-      check_spl_reg (&reg1);
 
       if (exp.X_op != O_constant)
 	{
@@ -1186,12 +1149,9 @@ md_assemble (char * str)
       break;
 
     case INST_TYPE_RD_IMM:
-      op_end = parse_reg (op_end, &reg1);  /* Get rd.  */
+      op_end = parse_gpr (op_end, &reg1);  /* Get rd.  */
       op_end = check_comma(op_end);
       op_end = parse_imm (op_end, & exp, MIN_IMM, MAX_IMM);
-
-      /* Check for spl registers.  */
-      check_spl_reg (&reg1);
 
       if (exp.X_op != O_constant)
 	{
@@ -1244,10 +1204,7 @@ md_assemble (char * str)
       break;
 
     case INST_TYPE_R2:
-      op_end = parse_reg (op_end, &reg2);  /* Get r2.  */
-
-      /* Check for spl registers.  */
-      check_spl_reg (&reg2);
+      op_end = parse_gpr (op_end, &reg2);  /* Get r2.  */
 
       inst |= (reg2 << RB_LOW) & RB_MASK;
       output = frag_more (isize);
