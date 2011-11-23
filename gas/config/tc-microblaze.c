@@ -522,7 +522,7 @@ parse_reg (char * s, unsigned * reg)
           s += 1;
         }
 
-      if ((int) tmpreg >= MIN_REGNUM && tmpreg <= MAX_REGNUM)
+      if ((int) tmpreg >= MIN_FSL_REGNUM && tmpreg <= MAX_FSL_REGNUM)
         *reg = tmpreg;
       else
 	{
