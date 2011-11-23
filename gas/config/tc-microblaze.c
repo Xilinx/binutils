@@ -493,21 +493,16 @@ parse_reg (char * s, unsigned * reg)
   }
 
   /* Handle special cases separately */
-  if (strncasecmp (s, "rpvr", 4) == 0)
+  if ((strncasecmp (s, "rpvr", 4) == 0) && ISDIGIT (s[4]))
     {
-      if (ISDIGIT (s[4]) && ISDIGIT (s[5]))
+      tmpreg = s[4] - '0';
+      s += 5;
+      if (ISDIGIT (s[0]))
         {
-          tmpreg = (s[4]-'0')*10 + s[5] - '0';
-          s += 6;
+          tmpreg = tmpreg * 10 + s[0] - '0';
+          s += 1;
         }
 
-      else if (ISDIGIT (s[4]))
-        {
-          tmpreg = s[4] - '0';
-          s += 5;
-        }
-      else
-        as_bad (_("register expected, but saw '%.6s'"), s);
       if ((int) tmpreg >= MIN_PVR_REGNUM && tmpreg <= MAX_PVR_REGNUM)
         *reg = REG_PVR + tmpreg;
       else
@@ -517,20 +512,15 @@ parse_reg (char * s, unsigned * reg)
         }
       return s;
     }
-  else if (strncasecmp (s, "rfsl", 4) == 0)
+  else if ((strncasecmp (s, "rfsl", 4)) == 0 && ISDIGIT (s[4]))
     {
-      if (ISDIGIT (s[4]) && ISDIGIT (s[5]))
+      tmpreg = s[4] - '0';
+      s += 5;
+      if (ISDIGIT (s[0]))
         {
-          tmpreg = (s[4] - '0') * 10 + s[5] - '0';
-          s += 6;
+          tmpreg = tmpreg * 10 + s[0] - '0';
+          s += 1;
         }
-      else if (ISDIGIT (s[4]))
-        {
-          tmpreg = s[4] - '0';
-          s += 5;
-        }
-      else
-	as_bad (_("register expected, but saw '%.6s'"), s);
 
       if ((int) tmpreg >= MIN_REGNUM && tmpreg <= MAX_REGNUM)
         *reg = tmpreg;
