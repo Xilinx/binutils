@@ -447,6 +447,35 @@ parse_gpr (char * s, unsigned * reg)
   return s;
 }
 
+static char *
+parse_fsl (char * s, unsigned * reg)
+{
+  unsigned tmpreg = 0;
+
+  if (strcmp (s, "") == 0)
+      as_fatal (_("Error in statement syntax"));
+
+  if ((strncasecmp (s, "rfsl", 4)) == 0 && ISDIGIT (s[4]))
+    {
+      tmpreg = s[4] - '0';
+      s += 5;
+      if (ISDIGIT (s[0]))
+        {
+          tmpreg = tmpreg * 10 + s[0] - '0';
+          s += 1;
+        }
+
+      if ((int) tmpreg >= MIN_FSL_REGNUM && tmpreg <= MAX_FSL_REGNUM)
+        *reg = tmpreg;
+      else
+          as_fatal (_("Invalid FSL register number at '%.6s'"), s);
+
+      return s;
+    }
+  as_fatal (_("FSL register expected, but saw '%.6s'"), s);
+  return s;
+}
+
 /* Try to parse a reg name.  */
 struct regs {
   const char *name;
@@ -506,32 +535,11 @@ parse_reg (char * s, unsigned * reg)
       if ((int) tmpreg >= MIN_PVR_REGNUM && tmpreg <= MAX_PVR_REGNUM)
         *reg = REG_PVR + tmpreg;
       else
-        {
-          as_bad (_("Invalid register number at '%.6s'"), s);
-          *reg = REG_PVR;
-        }
-      return s;
-    }
-  else if ((strncasecmp (s, "rfsl", 4)) == 0 && ISDIGIT (s[4]))
-    {
-      tmpreg = s[4] - '0';
-      s += 5;
-      if (ISDIGIT (s[0]))
-        {
-          tmpreg = tmpreg * 10 + s[0] - '0';
-          s += 1;
-        }
+          as_fatal (_("Invalid register number at '%.6s'"), s);
 
-      if ((int) tmpreg >= MIN_FSL_REGNUM && tmpreg <= MAX_FSL_REGNUM)
-        *reg = tmpreg;
-      else
-	{
-          as_bad (_("Invalid register number at '%.6s'"), s);
-          *reg = 0;
-	}
       return s;
     }
-  as_bad (_("register expected, but saw '%.6s'"), s);
+  as_fatal (_("register expected, but saw '%.6s'"), s);
   return s;
 }
 
@@ -939,7 +947,7 @@ md_assemble (char * str)
     case INST_TYPE_RD_RFSL:
       op_end = parse_gpr (op_end, &reg1);  /* Get rd.  */
       op_end = check_comma(op_end);
-      op_end = parse_reg (op_end, &immed);  /* Get rfslN.  */
+      op_end = parse_fsl (op_end, &immed);  /* Get rfslN.  */
 
       inst |= (reg1 << RD_LOW) & RD_MASK;
       inst |= (immed << IMM_LOW) & RFSL_MASK;
@@ -965,7 +973,7 @@ md_assemble (char * str)
     case INST_TYPE_R1_RFSL:
       op_end = parse_gpr (op_end, &reg1);  /* Get r1.  */
       op_end = check_comma(op_end);
-      op_end = parse_reg (op_end, &immed);  /* Get rfslN.  */
+      op_end = parse_fsl (op_end, &immed);  /* Get rfslN.  */
 
       inst |= (reg1 << RA_LOW) & RA_MASK;
       inst |= (immed << IMM_LOW) & RFSL_MASK;
@@ -973,7 +981,7 @@ md_assemble (char * str)
       break;
 
     case INST_TYPE_RFSL:
-      op_end = parse_reg (op_end, &immed);  /* Get rfslN.  */
+      op_end = parse_fsl (op_end, &immed);  /* Get rfslN.  */
 
       inst |= (immed << IMM_LOW) & RFSL_MASK;
       output = frag_more (isize);
