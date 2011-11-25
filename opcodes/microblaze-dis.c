@@ -396,6 +396,9 @@ print_insn_microblaze (bfd_vma memaddr, struct disassemble_info * info)
 	case INST_TYPE_RFSL:
 	  print_func (stream, "\t%s", get_field_rfsl (inst));
 	  break;
+        case INST_TYPE_NONE:
+          print_func (stream, "\t0x%08x", inst);
+          break;
 	default:
 	  /* If the disassembler lags the instruction set.  */
 	  print_func (stream, "\tundecoded operands, inst is 0x%04x", inst);
