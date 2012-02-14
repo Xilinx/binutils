@@ -2169,6 +2169,7 @@ md_apply_fix (fixS *   fixP,
       else
 	fixP->fx_r_type = BFD_RELOC_NONE;
       fixP->fx_addsy = section_symbol (absolute_section);
+      fixP->fx_done = 0;
     }
   return;
 }
