@@ -2161,6 +2161,8 @@ md_apply_fix (fixS *   fixP,
 	 moves code around due to relaxing.  */
       if (fixP->fx_r_type == BFD_RELOC_64_PCREL)
 	fixP->fx_r_type = BFD_RELOC_MICROBLAZE_64_NONE;
+      else if (fixP->fx_r_type == BFD_RELOC_32)
+	fixP->fx_r_type = BFD_RELOC_MICROBLAZE_32_NONE;
       else
 	fixP->fx_r_type = BFD_RELOC_NONE;
       fixP->fx_addsy = section_symbol (absolute_section);
@@ -2382,6 +2384,7 @@ tc_gen_reloc (asection * section ATTRIBUTE_UNUSED, fixS * fixp)
   switch (fixp->fx_r_type)
     {
     case BFD_RELOC_NONE:
+    case BFD_RELOC_MICROBLAZE_32_NONE:
     case BFD_RELOC_MICROBLAZE_64_NONE:
     case BFD_RELOC_32:
     case BFD_RELOC_MICROBLAZE_32_LO:

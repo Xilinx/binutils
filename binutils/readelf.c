@@ -10193,6 +10193,10 @@ is_none_reloc (unsigned int reloc_type)
       return reloc_type == 0;
     case EM_AARCH64:
       return reloc_type == 0 || reloc_type == 256;
+    case EM_MICROBLAZE:
+      return reloc_type == 30 /* R_MICROBLAZE_32_NONE.  */
+             || reloc_type == 0 /* R_MICROBLAZE_NONE.  */
+             || reloc_type == 9; /* R_MICROBLAZE_64_NONE.  */
     case EM_XTENSA_OLD:
     case EM_XTENSA:
       return (reloc_type == 0      /* R_XTENSA_NONE.  */
