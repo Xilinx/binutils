@@ -913,9 +913,12 @@ _bfd_elf_parse_eh_frame (bfd *abfd, struct bfd_link_info *info,
   goto success;
 
  free_no_table:
-  (*info->callbacks->einfo)
-    (_("%P: error in %B(%A); no .eh_frame_hdr table will be created.\n"),
-     abfd, sec);
+  /* FIXME: Remove the microblaze specifics when relaxing gets fixed.  */
+  if (bfd_get_arch(abfd) != bfd_arch_microblaze) {
+    (*info->callbacks->einfo)
+      (_("%P: error in %B(%A); no .eh_frame_hdr table will be created.\n"),
+       abfd, sec);
+  }
   hdr_info->table = FALSE;
   if (sec_info)
     free (sec_info);
