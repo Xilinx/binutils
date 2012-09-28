@@ -1,3 +1,7 @@
+2012-10-10  David Holsgrove  <david.holsgrove@xilinx.com>
+
+	* configure: Add Microblaze PICFLAG
+
 2012-07-31  Mike Frysinger  <vapier@gentoo.org>
 
 	* md5.c (md5_finish_ctx): Declare swap_bytes.  Assign SWAP() output
