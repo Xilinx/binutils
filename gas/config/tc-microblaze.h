@@ -113,4 +113,12 @@ extern void 	 md_apply_fix3 		       (fixS *, valueT *, segT);
 
 #define EXTERN_FORCE_RELOC -1
 
+#define TARGET_USE_CFIPOP 1
+
+#define tc_cfi_frame_initial_instructions microblaze_cfi_frame_initial_instructions
+extern void microblaze_cfi_frame_initial_instructions (void);
+
+#define DWARF2_DEFAULT_RETURN_COLUMN 15
+#define DWARF2_CIE_DATA_ALIGNMENT (-4)
+
 #endif /* TC_MICROBLAZE */

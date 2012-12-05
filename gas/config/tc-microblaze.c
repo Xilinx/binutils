@@ -29,6 +29,7 @@
 #include "safe-ctype.h"
 #include <string.h>
 #include <dwarf2dbg.h>
+#include "dw2gencfi.h"
 #include "aout/stab_gnu.h"
 
 #ifndef streq
@@ -2535,4 +2536,10 @@ cons_fix_new_microblaze (fragS * frag,
         }
     }
   fix_new_exp (frag, where, size, exp, 0, r);
+}
+
+void
+microblaze_cfi_frame_initial_instructions (void)
+{
+  cfi_add_CFA_def_cfa (1, 0);
 }
