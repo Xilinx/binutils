@@ -11885,7 +11885,6 @@ elf_gc_sweep_symbol (struct elf_link_hash_entry *h, void *data)
 
       inf = (struct elf_gc_sweep_symbol_info *) data;
       (*inf->hide_symbol) (inf->info, h, TRUE);
-      h->def_regular = 0;
       h->ref_regular = 0;
       h->ref_regular_nonweak = 0;
     }
