@@ -34,7 +34,7 @@
 	fnumaddd %f4, %f6, %f8, %f10
 	addxc	%g5, %g6, %g7
 	addxccc	%o1, %o2, %o3
-	random	%o4
+	random	%f6
 	umulxhi	%o5, %o6, %o7
 	lzd	%i1, %i2
 	cmask8	%i3
@@ -48,10 +48,10 @@
 	fsra16	%f42, %f44, %f46
 	fslas32	%f44, %f46, %f48
 	fsra32	%f46, %f48, %f50
-	pdistn	%f48, %f50, %f52
+	pdistn	%f48, %f50, %g1
 	fmean16	%f50, %f52, %f54
 	fpadd64	%f52, %f54, %f56
-	fchksum16 %f54, %f56, %f58
+	fchksm16 %f54, %f56, %f58
 	fpsub64	%f56, %f58, %f60
 	fpadds16 %f58, %f60, %f62
 	fpadds16s %f2, %f4, %f6

@@ -36,6 +36,7 @@
 
 #include "libiberty.h"
 
+#include "dwarf.h"
 #include "parameters.h"
 #include "object.h"
 #include "symtab.h"
@@ -110,18 +111,6 @@ extern "C" void *gold_mremap(void *, size_t, size_t, int);
 # define MREMAP_MAYMOVE 1
 #endif
 
-#ifndef HAVE_POSIX_FALLOCATE
-// A dummy, non general, version of posix_fallocate.  Here we just set
-// the file size and hope that there is enough disk space.  FIXME: We
-// could allocate disk space by walking block by block and writing a
-// zero byte into each block.
-static int
-posix_fallocate(int o, off_t offset, off_t len)
-{
-  return ftruncate(o, offset + len);
-}
-#endif // !defined(HAVE_POSIX_FALLOCATE)
-
 // Mingw does not have S_ISLNK.
 #ifndef S_ISLNK
 # define S_ISLNK(mode) 0
@@ -129,6 +118,27 @@ posix_fallocate(int o, off_t offset, off_t len)
 
 namespace gold
 {
+
+// A wrapper around posix_fallocate.  If we don't have posix_fallocate,
+// or the --no-posix-fallocate option is set, we try the fallocate
+// system call directly.  If that fails, we use ftruncate to set
+// the file size and hope that there is enough disk space.
+
+static int
+gold_fallocate(int o, off_t offset, off_t len)
+{
+#ifdef HAVE_POSIX_FALLOCATE
+  if (parameters->options().posix_fallocate())
+    return ::posix_fallocate(o, offset, len);
+#endif // defined(HAVE_POSIX_FALLOCATE)
+#ifdef HAVE_FALLOCATE
+  if (::fallocate(o, 0, offset, len) == 0)
+    return 0;
+#endif // defined(HAVE_FALLOCATE)
+  if (::ftruncate(o, offset + len) < 0)
+    return errno;
+  return 0;
+}
 
 // Output_data variables.
 
@@ -702,10 +712,11 @@ Output_reloc<elfcpp::SHT_REL, dynamic, size, big_endian>::Output_reloc(
     Output_data* od,
     Address address,
     bool is_relative,
-    bool is_symbolless)
+    bool is_symbolless,
+    bool use_plt_offset)
   : address_(address), local_sym_index_(GSYM_CODE), type_(type),
     is_relative_(is_relative), is_symbolless_(is_symbolless),
-    is_section_symbol_(false), shndx_(INVALID_CODE)
+    is_section_symbol_(false), use_plt_offset_(use_plt_offset), shndx_(INVALID_CODE)
 {
   // this->type_ is a bitfield; make sure TYPE fits.
   gold_assert(this->type_ == type);
@@ -723,10 +734,11 @@ Output_reloc<elfcpp::SHT_REL, dynamic, size, big_endian>::Output_reloc(
     unsigned int shndx,
     Address address,
     bool is_relative,
-    bool is_symbolless)
+    bool is_symbolless,
+    bool use_plt_offset)
   : address_(address), local_sym_index_(GSYM_CODE), type_(type),
     is_relative_(is_relative), is_symbolless_(is_symbolless),
-    is_section_symbol_(false), shndx_(shndx)
+    is_section_symbol_(false), use_plt_offset_(use_plt_offset), shndx_(shndx)
 {
   gold_assert(shndx != INVALID_CODE);
   // this->type_ is a bitfield; make sure TYPE fits.
@@ -748,10 +760,12 @@ Output_reloc<elfcpp::SHT_REL, dynamic, size, big_endian>::Output_reloc(
     Address address,
     bool is_relative,
     bool is_symbolless,
-    bool is_section_symbol)
+    bool is_section_symbol,
+    bool use_plt_offset)
   : address_(address), local_sym_index_(local_sym_index), type_(type),
     is_relative_(is_relative), is_symbolless_(is_symbolless),
-    is_section_symbol_(is_section_symbol), shndx_(INVALID_CODE)
+    is_section_symbol_(is_section_symbol), use_plt_offset_(use_plt_offset),
+    shndx_(INVALID_CODE)
 {
   gold_assert(local_sym_index != GSYM_CODE
               && local_sym_index != INVALID_CODE);
@@ -772,10 +786,12 @@ Output_reloc<elfcpp::SHT_REL, dynamic, size, big_endian>::Output_reloc(
     Address address,
     bool is_relative,
     bool is_symbolless,
-    bool is_section_symbol)
+    bool is_section_symbol,
+    bool use_plt_offset)
   : address_(address), local_sym_index_(local_sym_index), type_(type),
     is_relative_(is_relative), is_symbolless_(is_symbolless),
-    is_section_symbol_(is_section_symbol), shndx_(shndx)
+    is_section_symbol_(is_section_symbol), use_plt_offset_(use_plt_offset),
+    shndx_(shndx)
 {
   gold_assert(local_sym_index != GSYM_CODE
               && local_sym_index != INVALID_CODE);
@@ -798,7 +814,7 @@ Output_reloc<elfcpp::SHT_REL, dynamic, size, big_endian>::Output_reloc(
     Address address)
   : address_(address), local_sym_index_(SECTION_CODE), type_(type),
     is_relative_(false), is_symbolless_(false),
-    is_section_symbol_(true), shndx_(INVALID_CODE)
+    is_section_symbol_(true), use_plt_offset_(false), shndx_(INVALID_CODE)
 {
   // this->type_ is a bitfield; make sure TYPE fits.
   gold_assert(this->type_ == type);
@@ -819,7 +835,7 @@ Output_reloc<elfcpp::SHT_REL, dynamic, size, big_endian>::Output_reloc(
     Address address)
   : address_(address), local_sym_index_(SECTION_CODE), type_(type),
     is_relative_(false), is_symbolless_(false),
-    is_section_symbol_(true), shndx_(shndx)
+    is_section_symbol_(true), use_plt_offset_(false), shndx_(shndx)
 {
   gold_assert(shndx != INVALID_CODE);
   // this->type_ is a bitfield; make sure TYPE fits.
@@ -841,7 +857,7 @@ Output_reloc<elfcpp::SHT_REL, dynamic, size, big_endian>::Output_reloc(
     Address address)
   : address_(address), local_sym_index_(0), type_(type),
     is_relative_(false), is_symbolless_(false),
-    is_section_symbol_(false), shndx_(INVALID_CODE)
+    is_section_symbol_(false), use_plt_offset_(false), shndx_(INVALID_CODE)
 {
   // this->type_ is a bitfield; make sure TYPE fits.
   gold_assert(this->type_ == type);
@@ -857,7 +873,7 @@ Output_reloc<elfcpp::SHT_REL, dynamic, size, big_endian>::Output_reloc(
     Address address)
   : address_(address), local_sym_index_(0), type_(type),
     is_relative_(false), is_symbolless_(false),
-    is_section_symbol_(false), shndx_(shndx)
+    is_section_symbol_(false), use_plt_offset_(false), shndx_(shndx)
 {
   gold_assert(shndx != INVALID_CODE);
   // this->type_ is a bitfield; make sure TYPE fits.
@@ -876,7 +892,7 @@ Output_reloc<elfcpp::SHT_REL, dynamic, size, big_endian>::Output_reloc(
     Address address)
   : address_(address), local_sym_index_(TARGET_CODE), type_(type),
     is_relative_(false), is_symbolless_(false),
-    is_section_symbol_(false), shndx_(INVALID_CODE)
+    is_section_symbol_(false), use_plt_offset_(false), shndx_(INVALID_CODE)
 {
   // this->type_ is a bitfield; make sure TYPE fits.
   gold_assert(this->type_ == type);
@@ -893,7 +909,7 @@ Output_reloc<elfcpp::SHT_REL, dynamic, size, big_endian>::Output_reloc(
     Address address)
   : address_(address), local_sym_index_(TARGET_CODE), type_(type),
     is_relative_(false), is_symbolless_(false),
-    is_section_symbol_(false), shndx_(shndx)
+    is_section_symbol_(false), use_plt_offset_(false), shndx_(shndx)
 {
   gold_assert(shndx != INVALID_CODE);
   // this->type_ is a bitfield; make sure TYPE fits.
@@ -1109,7 +1125,14 @@ Output_reloc<elfcpp::SHT_REL, dynamic, size, big_endian>::symbol_value(
     {
       const Sized_symbol<size>* sym;
       sym = static_cast<const Sized_symbol<size>*>(this->u1_.gsym);
-      return sym->value() + addend;
+      if (this->use_plt_offset_ && sym->has_plt_offset())
+	{
+	  uint64_t plt_address =
+	    parameters->target().plt_address_for_global(sym);
+	  return plt_address + sym->plt_offset();
+	}
+      else
+	return sym->value() + addend;
     }
   gold_assert(this->local_sym_index_ != SECTION_CODE
 	      && this->local_sym_index_ != TARGET_CODE
@@ -1120,6 +1143,12 @@ Output_reloc<elfcpp::SHT_REL, dynamic, size, big_endian>::symbol_value(
   Sized_relobj_file<size, big_endian>* relobj =
       this->u1_.relobj->sized_relobj();
   gold_assert(relobj != NULL);
+  if (this->use_plt_offset_)
+    {
+      uint64_t plt_address =
+	  parameters->target().plt_address_for_local(relobj, lsi);
+      return plt_address + relobj->local_plt_offset(lsi);
+    }
   const Symbol_value<size>* symval = relobj->local_symbol(lsi);
   return symval->value(relobj, addend);
 }
@@ -1374,11 +1403,13 @@ Output_data_got<size, big_endian>::Got_entry::write(unsigned char* pov) const
 
     default:
       {
-	const Sized_relobj_file<size, big_endian>* object = this->u_.object;
+	const Relobj* object = this->u_.object;
         const unsigned int lsi = this->local_sym_index_;
-        const Symbol_value<size>* symval = object->local_symbol(lsi);
 	if (!this->use_plt_offset_)
-	  val = symval->value(this->u_.object, 0);
+	  {
+	    uint64_t lval = object->local_symbol_value(lsi, 0);
+	    val = convert_types<Valtype, uint64_t>(lval);
+	  }
 	else
 	  {
 	    uint64_t plt_address =
@@ -1435,7 +1466,7 @@ void
 Output_data_got<size, big_endian>::add_global_with_rel(
     Symbol* gsym,
     unsigned int got_type,
-    Rel_dyn* rel_dyn,
+    Output_data_reloc_generic* rel_dyn,
     unsigned int r_type)
 {
   if (gsym->has_got_offset(got_type))
@@ -1443,23 +1474,7 @@ Output_data_got<size, big_endian>::add_global_with_rel(
 
   unsigned int got_offset = this->add_got_entry(Got_entry());
   gsym->set_got_offset(got_type, got_offset);
-  rel_dyn->add_global(gsym, r_type, this, got_offset);
-}
-
-template<int size, bool big_endian>
-void
-Output_data_got<size, big_endian>::add_global_with_rela(
-    Symbol* gsym,
-    unsigned int got_type,
-    Rela_dyn* rela_dyn,
-    unsigned int r_type)
-{
-  if (gsym->has_got_offset(got_type))
-    return;
-
-  unsigned int got_offset = this->add_got_entry(Got_entry());
-  gsym->set_got_offset(got_type, got_offset);
-  rela_dyn->add_global(gsym, r_type, this, got_offset, 0);
+  rel_dyn->add_global_generic(gsym, r_type, this, got_offset, 0);
 }
 
 // Add a pair of entries for a global symbol to the GOT, and add
@@ -1470,7 +1485,7 @@ void
 Output_data_got<size, big_endian>::add_global_pair_with_rel(
     Symbol* gsym,
     unsigned int got_type,
-    Rel_dyn* rel_dyn,
+    Output_data_reloc_generic* rel_dyn,
     unsigned int r_type_1,
     unsigned int r_type_2)
 {
@@ -1479,30 +1494,11 @@ Output_data_got<size, big_endian>::add_global_pair_with_rel(
 
   unsigned int got_offset = this->add_got_entry_pair(Got_entry(), Got_entry());
   gsym->set_got_offset(got_type, got_offset);
-  rel_dyn->add_global(gsym, r_type_1, this, got_offset);
+  rel_dyn->add_global_generic(gsym, r_type_1, this, got_offset, 0);
 
   if (r_type_2 != 0)
-    rel_dyn->add_global(gsym, r_type_2, this, got_offset + size / 8);
-}
-
-template<int size, bool big_endian>
-void
-Output_data_got<size, big_endian>::add_global_pair_with_rela(
-    Symbol* gsym,
-    unsigned int got_type,
-    Rela_dyn* rela_dyn,
-    unsigned int r_type_1,
-    unsigned int r_type_2)
-{
-  if (gsym->has_got_offset(got_type))
-    return;
-
-  unsigned int got_offset = this->add_got_entry_pair(Got_entry(), Got_entry());
-  gsym->set_got_offset(got_type, got_offset);
-  rela_dyn->add_global(gsym, r_type_1, this, got_offset, 0);
-
-  if (r_type_2 != 0)
-    rela_dyn->add_global(gsym, r_type_2, this, got_offset + size / 8, 0);
+    rel_dyn->add_global_generic(gsym, r_type_2, this,
+				got_offset + size / 8, 0);
 }
 
 // Add an entry for a local symbol to the GOT.  This returns true if
@@ -1512,7 +1508,7 @@ Output_data_got<size, big_endian>::add_global_pair_with_rela(
 template<int size, bool big_endian>
 bool
 Output_data_got<size, big_endian>::add_local(
-    Sized_relobj_file<size, big_endian>* object,
+    Relobj* object,
     unsigned int symndx,
     unsigned int got_type)
 {
@@ -1530,7 +1526,7 @@ Output_data_got<size, big_endian>::add_local(
 template<int size, bool big_endian>
 bool
 Output_data_got<size, big_endian>::add_local_plt(
-    Sized_relobj_file<size, big_endian>* object,
+    Relobj* object,
     unsigned int symndx,
     unsigned int got_type)
 {
@@ -1549,10 +1545,10 @@ Output_data_got<size, big_endian>::add_local_plt(
 template<int size, bool big_endian>
 void
 Output_data_got<size, big_endian>::add_local_with_rel(
-    Sized_relobj_file<size, big_endian>* object,
+    Relobj* object,
     unsigned int symndx,
     unsigned int got_type,
-    Rel_dyn* rel_dyn,
+    Output_data_reloc_generic* rel_dyn,
     unsigned int r_type)
 {
   if (object->local_has_got_offset(symndx, got_type))
@@ -1560,24 +1556,7 @@ Output_data_got<size, big_endian>::add_local_with_rel(
 
   unsigned int got_offset = this->add_got_entry(Got_entry());
   object->set_local_got_offset(symndx, got_type, got_offset);
-  rel_dyn->add_local(object, symndx, r_type, this, got_offset);
-}
-
-template<int size, bool big_endian>
-void
-Output_data_got<size, big_endian>::add_local_with_rela(
-    Sized_relobj_file<size, big_endian>* object,
-    unsigned int symndx,
-    unsigned int got_type,
-    Rela_dyn* rela_dyn,
-    unsigned int r_type)
-{
-  if (object->local_has_got_offset(symndx, got_type))
-    return;
-
-  unsigned int got_offset = this->add_got_entry(Got_entry());
-  object->set_local_got_offset(symndx, got_type, got_offset);
-  rela_dyn->add_local(object, symndx, r_type, this, got_offset, 0);
+  rel_dyn->add_local_generic(object, symndx, r_type, this, got_offset, 0);
 }
 
 // Add a pair of entries for a local symbol to the GOT, and add
@@ -1586,11 +1565,11 @@ Output_data_got<size, big_endian>::add_local_with_rela(
 template<int size, bool big_endian>
 void
 Output_data_got<size, big_endian>::add_local_pair_with_rel(
-    Sized_relobj_file<size, big_endian>* object,
+    Relobj* object,
     unsigned int symndx,
     unsigned int shndx,
     unsigned int got_type,
-    Rel_dyn* rel_dyn,
+    Output_data_reloc_generic* rel_dyn,
     unsigned int r_type_1,
     unsigned int r_type_2)
 {
@@ -1602,35 +1581,11 @@ Output_data_got<size, big_endian>::add_local_pair_with_rel(
 			       Got_entry(object, symndx, false));
   object->set_local_got_offset(symndx, got_type, got_offset);
   Output_section* os = object->output_section(shndx);
-  rel_dyn->add_output_section(os, r_type_1, this, got_offset);
+  rel_dyn->add_output_section_generic(os, r_type_1, this, got_offset, 0);
 
   if (r_type_2 != 0)
-    rel_dyn->add_output_section(os, r_type_2, this, got_offset + size / 8);
-}
-
-template<int size, bool big_endian>
-void
-Output_data_got<size, big_endian>::add_local_pair_with_rela(
-    Sized_relobj_file<size, big_endian>* object,
-    unsigned int symndx,
-    unsigned int shndx,
-    unsigned int got_type,
-    Rela_dyn* rela_dyn,
-    unsigned int r_type_1,
-    unsigned int r_type_2)
-{
-  if (object->local_has_got_offset(symndx, got_type))
-    return;
-
-  unsigned int got_offset =
-      this->add_got_entry_pair(Got_entry(),
-			       Got_entry(object, symndx, false));
-  object->set_local_got_offset(symndx, got_type, got_offset);
-  Output_section* os = object->output_section(shndx);
-  rela_dyn->add_output_section(os, r_type_1, this, got_offset, 0);
-
-  if (r_type_2 != 0)
-    rela_dyn->add_output_section(os, r_type_2, this, got_offset + size / 8, 0);
+    rel_dyn->add_output_section_generic(os, r_type_2, this,
+					got_offset + size / 8, 0);
 }
 
 // Reserve a slot in the GOT for a local symbol or the second slot of a pair.
@@ -1639,11 +1594,11 @@ template<int size, bool big_endian>
 void
 Output_data_got<size, big_endian>::reserve_local(
     unsigned int i,
-    Sized_relobj<size, big_endian>* object,
+    Relobj* object,
     unsigned int sym_index,
     unsigned int got_type)
 {
-  this->reserve_slot(i);
+  this->do_reserve_slot(i);
   object->set_local_got_offset(sym_index, got_type, this->got_offset(i));
 }
 
@@ -1656,7 +1611,7 @@ Output_data_got<size, big_endian>::reserve_global(
     Symbol* gsym,
     unsigned int got_type)
 {
-  this->reserve_slot(i);
+  this->do_reserve_slot(i);
   gsym->set_got_offset(got_type, this->got_offset(i));
 }
 
@@ -1926,6 +1881,142 @@ Output_symtab_xindex::endian_do_write(unsigned char* const oview)
     }
 }
 
+// Output_fill_debug_info methods.
+
+// Return the minimum size needed for a dummy compilation unit header.
+
+size_t
+Output_fill_debug_info::do_minimum_hole_size() const
+{
+  // Compile unit header fields: unit_length, version, debug_abbrev_offset,
+  // address_size.
+  const size_t len = 4 + 2 + 4 + 1;
+  // For type units, add type_signature, type_offset.
+  if (this->is_debug_types_)
+    return len + 8 + 4;
+  return len;
+}
+
+// Write a dummy compilation unit header to fill a hole in the
+// .debug_info or .debug_types section.
+
+void
+Output_fill_debug_info::do_write(Output_file* of, off_t off, size_t len) const
+{
+  gold_debug(DEBUG_INCREMENTAL, "fill_debug_info(%08lx, %08lx)",
+	     static_cast<long>(off), static_cast<long>(len));
+
+  gold_assert(len >= this->do_minimum_hole_size());
+
+  unsigned char* const oview = of->get_output_view(off, len);
+  unsigned char* pov = oview;
+
+  // Write header fields: unit_length, version, debug_abbrev_offset,
+  // address_size.
+  if (this->is_big_endian())
+    {
+      elfcpp::Swap_unaligned<32, true>::writeval(pov, len - 4);
+      elfcpp::Swap_unaligned<16, true>::writeval(pov + 4, this->version);
+      elfcpp::Swap_unaligned<32, true>::writeval(pov + 6, 0);
+    }
+  else
+    {
+      elfcpp::Swap_unaligned<32, false>::writeval(pov, len - 4);
+      elfcpp::Swap_unaligned<16, false>::writeval(pov + 4, this->version);
+      elfcpp::Swap_unaligned<32, false>::writeval(pov + 6, 0);
+    }
+  pov += 4 + 2 + 4;
+  *pov++ = 4;
+
+  // For type units, the additional header fields -- type_signature,
+  // type_offset -- can be filled with zeroes.
+
+  // Fill the remainder of the free space with zeroes.  The first
+  // zero should tell the consumer there are no DIEs to read in this
+  // compilation unit.
+  if (pov < oview + len)
+    memset(pov, 0, oview + len - pov);
+
+  of->write_output_view(off, len, oview);
+}
+
+// Output_fill_debug_line methods.
+
+// Return the minimum size needed for a dummy line number program header.
+
+size_t
+Output_fill_debug_line::do_minimum_hole_size() const
+{
+  // Line number program header fields: unit_length, version, header_length,
+  // minimum_instruction_length, default_is_stmt, line_base, line_range,
+  // opcode_base, standard_opcode_lengths[], include_directories, filenames.
+  const size_t len = 4 + 2 + 4 + this->header_length;
+  return len;
+}
+
+// Write a dummy line number program header to fill a hole in the
+// .debug_line section.
+
+void
+Output_fill_debug_line::do_write(Output_file* of, off_t off, size_t len) const
+{
+  gold_debug(DEBUG_INCREMENTAL, "fill_debug_line(%08lx, %08lx)",
+	     static_cast<long>(off), static_cast<long>(len));
+
+  gold_assert(len >= this->do_minimum_hole_size());
+
+  unsigned char* const oview = of->get_output_view(off, len);
+  unsigned char* pov = oview;
+
+  // Write header fields: unit_length, version, header_length,
+  // minimum_instruction_length, default_is_stmt, line_base, line_range,
+  // opcode_base, standard_opcode_lengths[], include_directories, filenames.
+  // We set the header_length field to cover the entire hole, so the
+  // line number program is empty.
+  if (this->is_big_endian())
+    {
+      elfcpp::Swap_unaligned<32, true>::writeval(pov, len - 4);
+      elfcpp::Swap_unaligned<16, true>::writeval(pov + 4, this->version);
+      elfcpp::Swap_unaligned<32, true>::writeval(pov + 6, len - (4 + 2 + 4));
+    }
+  else
+    {
+      elfcpp::Swap_unaligned<32, false>::writeval(pov, len - 4);
+      elfcpp::Swap_unaligned<16, false>::writeval(pov + 4, this->version);
+      elfcpp::Swap_unaligned<32, false>::writeval(pov + 6, len - (4 + 2 + 4));
+    }
+  pov += 4 + 2 + 4;
+  *pov++ = 1;	// minimum_instruction_length
+  *pov++ = 0;	// default_is_stmt
+  *pov++ = 0;	// line_base
+  *pov++ = 5;	// line_range
+  *pov++ = 13;	// opcode_base
+  *pov++ = 0;	// standard_opcode_lengths[1]
+  *pov++ = 1;	// standard_opcode_lengths[2]
+  *pov++ = 1;	// standard_opcode_lengths[3]
+  *pov++ = 1;	// standard_opcode_lengths[4]
+  *pov++ = 1;	// standard_opcode_lengths[5]
+  *pov++ = 0;	// standard_opcode_lengths[6]
+  *pov++ = 0;	// standard_opcode_lengths[7]
+  *pov++ = 0;	// standard_opcode_lengths[8]
+  *pov++ = 1;	// standard_opcode_lengths[9]
+  *pov++ = 0;	// standard_opcode_lengths[10]
+  *pov++ = 0;	// standard_opcode_lengths[11]
+  *pov++ = 1;	// standard_opcode_lengths[12]
+  *pov++ = 0;	// include_directories (empty)
+  *pov++ = 0;	// filenames (empty)
+
+  // Some consumers don't check the header_length field, and simply
+  // start reading the line number program immediately following the
+  // header.  For those consumers, we fill the remainder of the free
+  // space with DW_LNS_set_basic_block opcodes.  These are effectively
+  // no-ops: the resulting line table program will not create any rows.
+  if (pov < oview + len)
+    memset(pov, elfcpp::DW_LNS_set_basic_block, oview + len - pov);
+
+  of->write_output_view(off, len, oview);
+}
+
 // Output_section::Input_section methods.
 
 // Return the current data size.  For an input section we store the size here.
@@ -2158,6 +2249,7 @@ Output_section::Output_section(const char* name, elfcpp::Elf_Word type,
     checkpoint_(NULL),
     lookup_maps_(new Output_section_lookup_maps),
     free_list_(),
+    free_space_fill_(NULL),
     patch_space_(0)
 {
   // An unallocated section has no address.  Forcing this means that
@@ -2338,7 +2430,10 @@ Output_section::add_input_section(Layout* layout,
       || layout->is_section_ordering_specified())
     {
       Input_section isecn(object, shndx, input_section_size, addralign);
-      if (layout->is_section_ordering_specified())
+      /* If section ordering is requested by specifying a ordering file,
+	 using --section-ordering-file, match the section name with
+	 a pattern.  */
+      if (parameters->options().section_ordering_file())
         {
           unsigned int section_order_index =
             layout->find_section_order_index(std::string(secname));
@@ -2981,7 +3076,10 @@ Output_section::set_final_data_size()
   if (this->is_patch_space_allowed_ && parameters->incremental_full())
     {
       double pct = parameters->options().incremental_patch();
-      off_t extra = static_cast<off_t>(data_size * pct);
+      size_t extra = static_cast<size_t>(data_size * pct);
+      if (this->free_space_fill_ != NULL
+          && this->free_space_fill_->minimum_hole_size() > extra)
+	extra = this->free_space_fill_->minimum_hole_size();
       off_t new_size = align_address(data_size + extra, this->addralign());
       this->patch_space_ = new_size - data_size;
       gold_debug(DEBUG_INCREMENTAL,
@@ -3344,7 +3442,7 @@ Output_section::Input_section_sort_section_order_index_compare::operator()(
 
 void
 Output_section::update_section_layout(
-  const Section_layout_order& order_map)
+  const Section_layout_order* order_map)
 {
   for (Input_section_list::iterator p = this->input_sections_.begin();
        p != this->input_sections_.end();
@@ -3358,8 +3456,8 @@ Output_section::update_section_layout(
 		         : p->relaxed_input_section()->relobj());
 	  unsigned int shndx = p->shndx();
 	  Section_layout_order::const_iterator it
-	    = order_map.find(Section_id(obj, shndx));
-	  if (it == order_map.end())
+	    = order_map->find(Section_id(obj, shndx));
+	  if (it == order_map->end())
 	    continue;
 	  unsigned int section_order_index = it->second;
 	  if (section_order_index != 0)
@@ -3514,6 +3612,26 @@ Output_section::do_write(Output_file* of)
 
       p->write(of);
       off = aligned_off + p->data_size();
+    }
+
+  // For incremental links, fill in unused chunks in debug sections
+  // with dummy compilation unit headers.
+  if (this->free_space_fill_ != NULL)
+    {
+      for (Free_list::Const_iterator p = this->free_list_.begin();
+	   p != this->free_list_.end();
+	   ++p)
+	{
+	  off_t off = p->start_;
+	  size_t len = p->end_ - off;
+	  this->free_space_fill_->write(of, this->offset() + off, len);
+	}
+      if (this->patch_space_ > 0)
+	{
+	  off_t off = this->current_data_size_for_child() - this->patch_space_;
+	  this->free_space_fill_->write(of, this->offset() + off,
+					this->patch_space_);
+	}
     }
 }
 
@@ -4719,17 +4837,27 @@ Output_file::open_base_file(const char* base_name, bool writable)
   if (use_base_file)
     {
       this->open(s.st_size);
-      ssize_t len = ::read(o, this->base_, s.st_size);
-      if (len < 0)
-        {
-	  gold_info(_("%s: read failed: %s"), base_name, strerror(errno));
-	  return false;
-        }
-      if (len < s.st_size)
-        {
-	  gold_info(_("%s: file too short"), base_name);
-	  return false;
-        }
+      ssize_t bytes_to_read = s.st_size;
+      unsigned char* p = this->base_;
+      while (bytes_to_read > 0)
+	{
+	  ssize_t len = ::read(o, p, bytes_to_read);
+	  if (len < 0)
+	    {
+	      gold_info(_("%s: read failed: %s"), base_name, strerror(errno));
+	      return false;
+	    }
+	  if (len == 0)
+	    {
+	      gold_info(_("%s: file too short: read only %lld of %lld bytes"),
+			base_name,
+			static_cast<long long>(s.st_size - bytes_to_read),
+			static_cast<long long>(s.st_size));
+	      return false;
+	    }
+	  p += len;
+	  bytes_to_read -= len;
+	}
       ::close(o);
       return true;
     }
@@ -4891,8 +5019,12 @@ Output_file::map_no_anonymous(bool writable)
   // output file will wind up incomplete, but we will have already
   // exited.  The alternative to fallocate would be to use fdatasync,
   // but that would be a more significant performance hit.
-  if (writable && ::posix_fallocate(o, 0, this->file_size_) < 0)
-    gold_fatal(_("%s: %s"), this->name_, strerror(errno));
+  if (writable)
+    {
+      int err = gold_fallocate(o, 0, this->file_size_);
+      if (err != 0)
+       gold_fatal(_("%s: %s"), this->name_, strerror(err));
+    }
 
   // Map the file into memory.
   int prot = PROT_READ;
@@ -4916,7 +5048,8 @@ Output_file::map_no_anonymous(bool writable)
 void
 Output_file::map()
 {
-  if (this->map_no_anonymous(true))
+  if (parameters->options().mmap_output_file()
+      && this->map_no_anonymous(true))
     return;
 
   // The mmap call might fail because of file system issues: the file

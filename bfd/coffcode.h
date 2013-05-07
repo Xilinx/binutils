@@ -670,7 +670,9 @@ sec_to_styp_flags (const char *sec_name, flagword sec_flags)
   /* FIXME: There is no gas syntax to specify the debug section flag.  */
   if (is_dbg)
     {
-      sec_flags &= (SEC_LINK_ONCE | SEC_LINK_DUPLICATES_DISCARD);
+      sec_flags &= (SEC_LINK_ONCE | SEC_LINK_DUPLICATES_DISCARD
+      		    | SEC_LINK_DUPLICATES_SAME_CONTENTS
+      		    | SEC_LINK_DUPLICATES_SAME_SIZE);
       sec_flags |= SEC_DEBUGGING | SEC_READONLY;
     }
 
@@ -698,7 +700,11 @@ sec_to_styp_flags (const char *sec_name, flagword sec_flags)
   /* skip SORT */
   if (sec_flags & SEC_LINK_ONCE)
     styp_flags |= IMAGE_SCN_LNK_COMDAT;
-  /* skip LINK_DUPLICATES */
+  if ((sec_flags
+       & (SEC_LINK_DUPLICATES_DISCARD | SEC_LINK_DUPLICATES_SAME_CONTENTS
+          | SEC_LINK_DUPLICATES_SAME_SIZE)) != 0)
+    styp_flags |= IMAGE_SCN_LNK_COMDAT;
+  
   /* skip LINKER_CREATED */
 
   if ((sec_flags & SEC_COFF_NOREAD) == 0)
@@ -5670,7 +5676,7 @@ static bfd_coff_backend_data ticoff1_swap_table =
 
 #ifndef coff_section_already_linked
 #define coff_section_already_linked \
-  _bfd_generic_section_already_linked
+  _bfd_coff_section_already_linked
 #endif
 
 #ifndef coff_bfd_define_common_symbol

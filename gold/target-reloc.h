@@ -423,17 +423,17 @@ apply_relocation(const Relocate_info<size, big_endian>* relinfo,
 		 section_size_type view_size)
 {
   // Construct the ELF relocation in a temporary buffer.
-  const int reloc_size = elfcpp::Elf_sizes<64>::rela_size;
+  const int reloc_size = elfcpp::Elf_sizes<size>::rela_size;
   unsigned char relbuf[reloc_size];
-  elfcpp::Rela<64, false> rel(relbuf);
-  elfcpp::Rela_write<64, false> orel(relbuf);
+  elfcpp::Rela<size, big_endian> rel(relbuf);
+  elfcpp::Rela_write<size, big_endian> orel(relbuf);
   orel.put_r_offset(r_offset);
-  orel.put_r_info(elfcpp::elf_r_info<64>(0, r_type));
+  orel.put_r_info(elfcpp::elf_r_info<size>(0, r_type));
   orel.put_r_addend(r_addend);
 
   // Setup a Symbol_value for the global symbol.
-  const Sized_symbol<64>* sym = static_cast<const Sized_symbol<64>*>(gsym);
-  Symbol_value<64> symval;
+  const Sized_symbol<size>* sym = static_cast<const Sized_symbol<size>*>(gsym);
+  Symbol_value<size> symval;
   gold_assert(sym->has_symtab_index() && sym->symtab_index() != -1U);
   symval.set_output_symtab_index(sym->symtab_index());
   symval.set_output_value(sym->value());
@@ -669,6 +669,7 @@ relocate_for_relocatable(
 	    case Relocatable_relocs::RELOC_ADJUST_FOR_SECTION_2:
 	    case Relocatable_relocs::RELOC_ADJUST_FOR_SECTION_4:
 	    case Relocatable_relocs::RELOC_ADJUST_FOR_SECTION_8:
+	    case Relocatable_relocs::RELOC_ADJUST_FOR_SECTION_4_UNALIGNED:
 	      {
 		// We are adjusting a section symbol.  We need to find
 		// the symbol table index of the section symbol for
@@ -788,6 +789,12 @@ relocate_for_relocatable(
 	    case Relocatable_relocs::RELOC_ADJUST_FOR_SECTION_8:
 	      Relocate_functions<size, big_endian>::rel64(padd, object,
 							  psymval);
+	      break;
+
+	    case Relocatable_relocs::RELOC_ADJUST_FOR_SECTION_4_UNALIGNED:
+	      Relocate_functions<size, big_endian>::rel32_unaligned(padd,
+								    object,
+								    psymval);
 	      break;
 
 	    default:

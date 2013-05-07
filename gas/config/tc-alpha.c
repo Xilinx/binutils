@@ -1394,7 +1394,7 @@ load_expression (int targreg,
 		    gas_assert (insn.nfixups + 1 <= MAX_INSN_FIXUPS);
 		    insn.fixups[insn.nfixups].reloc = BFD_RELOC_ALPHA_NOP;
 		    ensym = symbol_find_or_make (ensymname);
-		    ensym->sy_used = 1;
+		    symbol_mark_used (ensym);
 		    /* The fixup must be the same as the BFD_RELOC_ALPHA_BOH
 		       case in emit_jsrjmp.  See B.4.5.2 of the OpenVMS Linker
 		       Utility Manual.  */
@@ -1426,7 +1426,7 @@ load_expression (int targreg,
 		    gas_assert (insn.nfixups + 1 <= MAX_INSN_FIXUPS);
 		    insn.fixups[insn.nfixups].reloc = BFD_RELOC_ALPHA_LDA;
 		    psym = symbol_find_or_make (psymname);
-		    psym->sy_used = 1;
+		    symbol_mark_used (psym);
 		    insn.fixups[insn.nfixups].exp.X_op = O_subtract;
 		    insn.fixups[insn.nfixups].exp.X_add_symbol = psym;
 		    insn.fixups[insn.nfixups].exp.X_op_symbol = alpha_evax_proc->symbol;
@@ -1995,7 +1995,7 @@ insert_operand (unsigned insn,
 	}
 
       if (val < min || val > max)
-	as_warn_value_out_of_range (_("operand"), val, min, max, file, line);
+	as_bad_value_out_of_range (_("operand"), val, min, max, file, line);
     }
 
   if (operand->insert)
@@ -3412,19 +3412,22 @@ add_to_link_pool (symbolS *sym, offsetT addend)
   p = frag_more (8);
   memset (p, 0, 8);
 
-  /* Create the basesym - linksym expression (offset of the added entry).  */
+  /* Create a symbol for 'basesym - linksym' (offset of the added entry).  */
   e.X_op = O_subtract;
   e.X_add_symbol = linksym;
   e.X_op_symbol = basesym;
   e.X_add_number = 0;
   expsym = make_expr_symbol (&e);
 
+  /* Create a fixup for the entry.  */
   fixp = fix_new
     (frag_now, p - frag_now->fr_literal, 8, sym, addend, 0, BFD_RELOC_64);
   fixp->tc_fix_data.info = get_alpha_reloc_tag (next_sequence_num--);
   fixp->tc_fix_data.info->sym = expsym;
 
   subseg_set (current_section, current_subsec);
+
+  /* Return the symbol.  */
   return expsym;
 }
 #endif /* OBJ_EVAX */
@@ -3599,7 +3602,7 @@ s_alpha_comm (int ignore ATTRIBUTE_UNUSED)
       frag_align (log_align, 0, 0);
       record_alignment (bss_section, log_align);
 
-      symbolP->sy_frag = frag_now;
+      symbol_set_frag (symbolP, frag_now);
       pfrag = frag_var (rs_org, 1, 1, (relax_substateT)0, symbolP,
                         size, NULL);
       *pfrag = 0;
@@ -4432,6 +4435,7 @@ static void
 s_alpha_frame (int ignore ATTRIBUTE_UNUSED)
 {
   long val;
+  int ra;
 
   alpha_evax_proc->framereg = tc_get_register (1);
 
@@ -4447,7 +4451,10 @@ s_alpha_frame (int ignore ATTRIBUTE_UNUSED)
 
   alpha_evax_proc->framesize = val;
 
-  (void) tc_get_register (1);
+  ra = tc_get_register (1);
+  if (ra != AXP_REG_RA)
+    as_warn (_("Bad RA (%d) register for .frame"), ra);
+
   SKIP_WHITESPACE ();
   if (*input_line_pointer++ != ',')
     {
@@ -4464,13 +4471,12 @@ s_alpha_frame (int ignore ATTRIBUTE_UNUSED)
 static void
 s_alpha_prologue (int ignore ATTRIBUTE_UNUSED)
 {
-  get_absolute_expression ();
   demand_empty_rest_of_line ();
   alpha_prologue_label = symbol_new
     (FAKE_LABEL_NAME, now_seg, (valueT) frag_now_fix (), frag_now);
 }
 
-/* Parse .pdesc <entry_name>.
+/* Parse .pdesc <entry_name>,{null|stack|reg}
    Insert a procedure descriptor.  */
 
 static void
@@ -4698,31 +4704,26 @@ s_alpha_linkage (int ignore ATTRIBUTE_UNUSED)
       p = frag_more (LKP_S_K_SIZE);
       memset (p, 0, LKP_S_K_SIZE);
       fixp = fix_new_exp
-	(frag_now, p - frag_now->fr_literal, LKP_S_K_SIZE, &exp, 0,\
+	(frag_now, p - frag_now->fr_literal, LKP_S_K_SIZE, &exp, 0,
 	 BFD_RELOC_ALPHA_LINKAGE);
 
-      linkage_fixup = (struct alpha_linkage_fixups *)
-	xmalloc (sizeof (struct alpha_linkage_fixups));
-
-      linkage_fixup->fixp = fixp;
-      linkage_fixup->next = 0;
-
-      if (alpha_insn_label == 0)
+      if (alpha_insn_label == NULL)
 	alpha_insn_label = symbol_new
 	  (FAKE_LABEL_NAME, now_seg, (valueT) frag_now_fix (), frag_now);
+
+      /* Create a linkage element.  */
+      linkage_fixup = (struct alpha_linkage_fixups *)
+	xmalloc (sizeof (struct alpha_linkage_fixups));
+      linkage_fixup->fixp = fixp;
+      linkage_fixup->next = NULL;
       linkage_fixup->label = alpha_insn_label;
 
-      if (alpha_linkage_fixup_root == 0)
-	{
-	  alpha_linkage_fixup_root = alpha_linkage_fixup_tail = linkage_fixup;
-	  alpha_linkage_fixup_tail->next = 0;
-	}
+      /* Append it to the list.  */
+      if (alpha_linkage_fixup_root == NULL)
+        alpha_linkage_fixup_root = linkage_fixup;
       else
-	{
-	  alpha_linkage_fixup_tail->next = linkage_fixup;
-	  alpha_linkage_fixup_tail = linkage_fixup;
-	  alpha_linkage_fixup_tail->next = 0;
-	}
+        alpha_linkage_fixup_tail->next = linkage_fixup;
+      alpha_linkage_fixup_tail = linkage_fixup;
     }
   demand_empty_rest_of_line ();
 }
@@ -4756,7 +4757,6 @@ s_alpha_code_address (int ignore ATTRIBUTE_UNUSED)
 static void
 s_alpha_fp_save (int ignore ATTRIBUTE_UNUSED)
 {
-
   alpha_evax_proc->fp_save = tc_get_register (1);
 
   demand_empty_rest_of_line ();
@@ -5302,7 +5302,7 @@ maybe_set_gp (asection *sec)
 
   if (!sec)
     return;
-  vma = bfd_get_section_vma (foo, sec);
+  vma = bfd_get_section_vma (sec->owner, sec);
   if (vma && vma < alpha_gp_value)
     alpha_gp_value = vma;
 }
